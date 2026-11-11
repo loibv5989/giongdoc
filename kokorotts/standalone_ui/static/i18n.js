@@ -1,8 +1,8 @@
 const bootstrap = window.__KOKOROTTS_UI__ || {
-  locale: 'en',
-  defaultLocale: 'en',
-  locales: [{ code: 'en', name: 'English', path: '/en', direction: 'ltr', browserLanguage: 'en-US' }],
-  storageKey: 'kokorotts-ui-locale-v1',
+  locale: 'vi',
+  defaultLocale: 'vi',
+  locales: [{ code: 'vi', name: 'Tiếng Việt', path: '/vi', direction: 'ltr', browserLanguage: 'vi-VN' }],
+  storageKey: 'solqi-tts-ui-locale-v2',
 }
 
 let messages = bootstrap.messages || {}

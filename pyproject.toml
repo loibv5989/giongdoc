@@ -64,6 +64,10 @@ artifacts = [
 "assets/kokoro_logo_horizontal.webp" = "assets/kokoro_logo_horizontal.webp"
 "assets/hangrylabs_logo.webp" = "assets/hangrylabs_logo.webp"
 "assets/solqi-tts.webp" = "assets/solqi-tts.webp"
+"assets/favicon.ico" = "assets/favicon.ico"
+"assets/favicon-16x16.png" = "assets/favicon-16x16.png"
+"assets/favicon-32x32.png" = "assets/favicon-32x32.png"
+"assets/apple-touch-icon.png" = "assets/apple-touch-icon.png"
 
 [project.urls]
 Homepage = "https://github.com/Hangry-Labs/kokoroTTS"

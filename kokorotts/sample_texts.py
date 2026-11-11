@@ -5,13 +5,13 @@ from .catalog import voice_language
 
 SAMPLE_TEXTS = {
     "a": [
-        "Choose a voice, adjust the speed if needed, then press Generate. Kokoro will turn this text into an MP3 before your coffee gets suspicious.",
+        "Choose a voice, adjust the speed if needed, then press Generate. SolQi-TTS will turn this text into an MP3 before your coffee gets suspicious.",
         "A good demo sentence is like a good diner breakfast: simple, warm, and surprisingly effective.",
         "If this voice sounds relaxed, it is because the text has not seen the meeting agenda yet.",
         "The quick brown fox booked a podcast studio and asked the lazy dog to handle production.",
         "Press Generate, listen once, then pretend you knew the perfect voice all along.",
         "Every great audio test begins with a sentence that does not take itself too seriously.",
-        "This is Kokoro TTS speaking clearly, calmly, and with no intention of joining a conference call.",
+        "This is SolQi-TTS speaking clearly, calmly, and with no intention of joining a conference call.",
         "If the output sounds good, reward the model with another sentence and maybe fewer commas.",
         "A short text helps you test speed; a long paragraph helps you discover where the drama lives.",
         "Today feels like a good day to turn typed words into something that sounds almost too confident.",
@@ -23,7 +23,7 @@ SAMPLE_TEXTS = {
         "The quick brown fox brought biscuits, and the lazy dog suddenly became much more cooperative.",
         "Press Generate and listen carefully; if it sounds posh, that is simply good manners.",
         "A small paragraph can reveal a lot, especially when it has punctuation and a tiny sense of occasion.",
-        "Kokoro TTS is speaking from the web interface, probably with excellent posture.",
+        "SolQi-TTS is speaking from the web interface, probably with excellent posture.",
         "If this sounds natural, celebrate with a sensible volume level and a very calm nod.",
         "Try a short sentence first, then a longer one when the kettle has finished negotiating.",
         "The best audio tests are brief, cheerful, and unlikely to cause trouble at the village hall.",
@@ -113,7 +113,7 @@ SAMPLE_TEXTS = {
         "Clique em Gerar, escute o resultado e escolha a voz que combina melhor com seu texto.",
     ],
     "d": [
-        "Wählen Sie eine Stimme, passen Sie bei Bedarf das Tempo an und klicken Sie auf Erzeugen. Kokoro macht daraus eine Audiodatei, bevor der Kaffee misstrauisch wird.",
+        "Wählen Sie eine Stimme, passen Sie bei Bedarf das Tempo an und klicken Sie auf Erzeugen. SolQi-TTS macht daraus eine Audiodatei, bevor der Kaffee misstrauisch wird.",
         "Ein guter Testsatz klingt klar, natürlich und nimmt sich selbst nicht zu ernst.",
         "Dieser Text prüft die deutsche Aussprache, Pausen und den Rhythmus der Stimme.",
         "Wenn eine Katze einen Podcast hätte, würde sie zuerst einen bequemeren Stuhl verlangen.",
@@ -125,7 +125,7 @@ SAMPLE_TEXTS = {
         "Klicken Sie auf Erzeugen, hören Sie das Ergebnis an und wählen Sie Ihre Lieblingsstimme.",
     ],
     "v": [
-        "Hãy chọn một giọng đọc, điều chỉnh tốc độ nếu cần, rồi nhấn Tạo. Kokoro sẽ biến đoạn văn này thành âm thanh trước khi cà phê kịp nguội.",
+        "Hãy chọn một giọng đọc, điều chỉnh tốc độ nếu cần, rồi nhấn Tạo. SolQi-TTS sẽ biến đoạn văn này thành âm thanh trước khi cà phê kịp nguội.",
         "Một câu thử giọng hay nên rõ ràng, tự nhiên và vui vừa đủ để không làm chiếc micro căng thẳng.",
         "Đoạn văn này giúp kiểm tra cách phát âm, nhịp điệu và độ ổn định của giọng tiếng Việt.",
         "Nếu một chú mèo làm podcast, có lẽ việc đầu tiên nó yêu cầu là một chiếc ghế thật êm.",

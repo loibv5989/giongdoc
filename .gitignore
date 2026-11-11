@@ -201,3 +201,4 @@ testbench/results/*.json
 /examples/*.ogg
 /examples/*.aac
 /examples/*.m4a
+*.Identifier

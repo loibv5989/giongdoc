@@ -57,7 +57,7 @@ from .openai_compat import (
 from .natural_chunking import ChunkingValidationError
 from .pipeline import ENGLISH_QUALITY_PHONEME_LIMIT, MODEL_PHONEME_LIMIT
 from .runtime import InferenceRuntime, SynthesisChunk, SynthesisResult
-from .sample_texts import get_initial_text, get_intro_text, get_random_quote
+from .sample_texts import get_intro_text, get_random_quote
 from .schemas import (
     ChunkingSettingsUpdate,
     MCPSettingsUpdate,
@@ -468,8 +468,8 @@ def get_synthesis_units(
 
 
 api = FastAPI(
-    title="KokoroTTS API",
-    description="OpenAI-compatible speech and native KokoroTTS APIs",
+    title="SolQi-TTS API",
+    description="OpenAI-compatible speech and native SolQi-TTS APIs",
     version=KOKORO_VERSION,
     openapi_url="/tts/openapi.json",
     docs_url="/tts/docs",
@@ -481,7 +481,7 @@ api = FastAPI(
         },
         {"name": "Health", "description": "Container liveness and readiness."},
         {
-            "name": "KokoroTTS native API",
+            "name": "SolQi-TTS native API",
             "description": "Full Kokoro controls, streaming, discovery, and diagnostics.",
         },
         {"name": "System", "description": "Deployment and model lifecycle controls."},
@@ -585,7 +585,7 @@ def openai_model(requested_model: str) -> dict[str, str]:
     return {"id": model, "object": "model", "owned_by": "hangry-labs"}
 
 
-@api.get("/tts/ping", tags=["KokoroTTS native API"])
+@api.get("/tts/ping", tags=["SolQi-TTS native API"])
 def ping() -> dict:
     return {
         "msg": "pong",
@@ -597,7 +597,7 @@ def ping() -> dict:
     }
 
 
-@api.get("/tts/status", tags=["KokoroTTS native API"])
+@api.get("/tts/status", tags=["SolQi-TTS native API"])
 def status() -> dict:
     served_voices = RUNTIME.served_voices
     served_languages = list(dict.fromkeys(voice_language(voice) for voice in served_voices))
@@ -633,12 +633,13 @@ def status() -> dict:
     }
 
 
-@api.get("/tts/defaults", tags=["KokoroTTS native API"])
+@api.get("/tts/defaults", tags=["SolQi-TTS native API"])
 def defaults() -> dict:
     served_voices = RUNTIME.served_voices
-    default_voice = "af_heart" if "af_heart" in served_voices else served_voices[0]
+    fallback_voice = "af_heart" if "af_heart" in served_voices else served_voices[0]
+    default_voice = next((voice for voice in served_voices if voice_language(voice) == "v"), fallback_voice)
     return {
-        "text": get_initial_text(),
+        "text": get_intro_text(default_voice),
         "input_type": "text",
         "input_types": {
             "text": {"label": "Plain text", "experimental": False},
@@ -662,7 +663,7 @@ def defaults() -> dict:
     }
 
 
-@api.get("/tts/formats", tags=["KokoroTTS native API"])
+@api.get("/tts/formats", tags=["SolQi-TTS native API"])
 def formats() -> dict:
     return {
         "default": "wav",
@@ -671,7 +672,7 @@ def formats() -> dict:
     }
 
 
-@api.get("/tts/stream-formats", tags=["KokoroTTS native API"])
+@api.get("/tts/stream-formats", tags=["SolQi-TTS native API"])
 def stream_formats() -> dict:
     return {
         "default": "pcm_s16le",
@@ -685,7 +686,7 @@ def stream_formats() -> dict:
     }
 
 
-@api.get("/tts/languages", tags=["KokoroTTS native API"])
+@api.get("/tts/languages", tags=["SolQi-TTS native API"])
 def languages() -> dict:
     served_languages = list(
         dict.fromkeys(voice_language(voice) for voice in RUNTIME.served_voices)
@@ -696,7 +697,7 @@ def languages() -> dict:
     return {"languages": languages, "loaded_languages": served_languages}
 
 
-@api.get("/tts/samples", tags=["KokoroTTS native API"])
+@api.get("/tts/samples", tags=["SolQi-TTS native API"])
 def samples(
     language: str = Query("a", description="Kokoro language prefix."),
     random_sample: bool = Query(
@@ -718,7 +719,7 @@ def samples(
     }
 
 
-@api.get("/tts/speakers", tags=["KokoroTTS native API"])
+@api.get("/tts/speakers", tags=["SolQi-TTS native API"])
 def speakers(language: str = Query("a", description="Kokoro language prefix.")) -> dict:
     available = voices_for_language(language, RUNTIME.served_voices)
     if language not in LANGUAGE_CHOICES or not available:
@@ -730,7 +731,7 @@ def speakers(language: str = Query("a", description="Kokoro language prefix.")) 
     }
 
 
-@api.get("/tts/voices", tags=["KokoroTTS native API"])
+@api.get("/tts/voices", tags=["SolQi-TTS native API"])
 def voices() -> dict:
     return {"voices": voice_inventory(RUNTIME.served_voices)}
 
@@ -816,7 +817,7 @@ def update_chunking_setting(payload: ChunkingSettingsUpdate) -> dict:
     return deployment_settings_payload()
 
 
-@api.post("/tts/metrics", tags=["KokoroTTS native API"])
+@api.post("/tts/metrics", tags=["SolQi-TTS native API"])
 def metrics(payload: MetricsRequest) -> dict:
     if not RUNTIME.serves_voice(payload.voice):
         raise HTTPException(
@@ -835,7 +836,7 @@ def metrics(payload: MetricsRequest) -> dict:
     }
 
 
-@api.post("/tts/tokenize", tags=["KokoroTTS native API"])
+@api.post("/tts/tokenize", tags=["SolQi-TTS native API"])
 def tokenize(payload: MetricsRequest) -> dict:
     try:
         units = get_synthesis_units(
@@ -898,12 +899,12 @@ def openai_speech(payload: OpenAISpeechRequest) -> StreamingResponse:
     return response
 
 
-@api.post("/tts/generate", tags=["KokoroTTS native API"])
+@api.post("/tts/generate", tags=["SolQi-TTS native API"])
 def generate_tts(payload: TTSRequest) -> StreamingResponse:
     return audio_response(payload, "/tts/generate")
 
 
-@api.post("/tts/stream", tags=["KokoroTTS native API"])
+@api.post("/tts/stream", tags=["SolQi-TTS native API"])
 async def stream_tts(
     request: Request, payload: StreamingTTSRequest
 ) -> StreamingResponse:
@@ -964,7 +965,7 @@ async def stream_tts(
 
 
 @api.post("/system/models/purge", tags=["System"])
-@api.post("/tts/purge", tags=["KokoroTTS native API"], deprecated=True)
+@api.post("/tts/purge", tags=["SolQi-TTS native API"], deprecated=True)
 def purge_models(payload: PurgeRequest | None = None) -> dict:
     requested_device = payload.device if payload else None
     if requested_device:
@@ -976,6 +977,6 @@ def purge_models(payload: PurgeRequest | None = None) -> dict:
     return {"purged": purged, "remaining_model_devices": remaining}
 
 
-@api.post("/tts/convert", tags=["KokoroTTS native API"], deprecated=True)
+@api.post("/tts/convert", tags=["SolQi-TTS native API"], deprecated=True)
 def convert(payload: TTSRequest) -> StreamingResponse:
     return audio_response(payload, "/tts/convert")

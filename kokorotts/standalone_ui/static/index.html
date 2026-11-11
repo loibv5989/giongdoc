@@ -4,8 +4,12 @@
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <meta name="color-scheme" content="dark">
-  <title>KokoroTTS</title>
-  <link rel="icon" type="image/webp" sizes="128x128" href="/assets/kokoro_favicon.webp">
+  <title>{{UI_TITLE}}</title>
+  <meta name="description" content="{{UI_DESCRIPTION}}">
+  <link rel="icon" href="/assets/favicon.ico" sizes="any">
+  <link rel="icon" type="image/png" sizes="32x32" href="/assets/favicon-32x32.png">
+  <link rel="icon" type="image/png" sizes="16x16" href="/assets/favicon-16x16.png">
+  <link rel="apple-touch-icon" sizes="180x180" href="/assets/apple-touch-icon.png">
   <script>
     window.__KOKOROTTS_UI__ = {{UI_BOOTSTRAP}}
     try {
@@ -62,8 +66,8 @@
   <main class="workspace" data-view="generate">
     <aside class="settings-panel">
       <div class="section-title"><i class="icon-sliders-horizontal"></i><span data-i18n="voice.title">Voice</span></div>
-      <label class="field"><span data-i18n="voice.language">Language</span><select id="language"><option value="a">American English</option></select></label>
-      <label class="field"><span data-i18n="voice.speaker">Speaker</span><select id="voice"><option value="af_heart">af_heart</option></select></label>
+      <label class="field"><span data-i18n="voice.language">Language</span><select id="language"><option value="v" data-i18n="languages.vietnamese">Tiếng Việt</option></select></label>
+      <label class="field"><span data-i18n="voice.speaker">Speaker</span><select id="voice"><option value="diem_trinh">Diễm Trinh</option></select></label>
       <label class="field"><span data-i18n="voice.hardware">Hardware</span><select id="device"><option value="auto" data-i18n="common.auto">Auto</option><option value="cpu">CPU</option></select></label>
 
       <div class="settings-section">
@@ -101,9 +105,9 @@
         <div class="script-toolbar">
           <label class="script-inline-name"><span class="visually-hidden" data-i18n="scripts.name">Script name</span><input id="script-name" type="text" maxlength="80" placeholder="Name this script" data-i18n-placeholder="scripts.namePlaceholder" autocomplete="off"></label>
           <button class="secondary-button compact-command" id="script-save" type="button" hidden><i class="icon-check"></i><span data-i18n="scripts.saveShort">Save</span></button>
-          <button class="icon-button bordered" id="dialogue-undo" type="button" title="Undo" aria-label="Undo" disabled><i class="icon-rotate-ccw"></i></button>
-          <button class="icon-button bordered" id="dialogue-redo" type="button" title="Redo" aria-label="Redo" disabled><i class="icon-rotate-ccw" style="transform:scaleX(-1)"></i></button>
-          <button class="icon-button bordered" id="script-new" type="button" title="New script" aria-label="New script"><i class="icon-file-audio"></i></button>
+          <button class="icon-button bordered" id="dialogue-undo" type="button" title="Undo" aria-label="Undo" data-i18n-title="scripts.undo" data-i18n-aria-label="scripts.undo" disabled><i class="icon-rotate-ccw"></i></button>
+          <button class="icon-button bordered" id="dialogue-redo" type="button" title="Redo" aria-label="Redo" data-i18n-title="scripts.redo" data-i18n-aria-label="scripts.redo" disabled><i class="icon-rotate-ccw" style="transform:scaleX(-1)"></i></button>
+          <button class="icon-button bordered" id="script-new" type="button" title="New script" aria-label="New script" data-i18n-title="scripts.new" data-i18n-aria-label="scripts.new"><i class="icon-file-audio"></i></button>
           <input id="script-import-input" type="file" accept=".ssml,.xml,application/ssml+xml" hidden>
           <details class="script-transfer-menu"><summary><i class="icon-upload"></i><span data-i18n="scripts.transfer">Import / export</span></summary><div class="script-transfer-panel"><button class="secondary-button" id="script-import" type="button" data-i18n="scripts.import">Import SSML-H</button><button class="secondary-button" id="script-download" type="button" data-i18n="scripts.export">Export SSML-H</button></div></details>
         </div>
@@ -111,7 +115,7 @@
           <div class="section-title"><i class="icon-message-square-text"></i><span id="input-mode-label" data-i18n="composer.text">Text</span><small class="markup-experimental" id="markup-experimental" hidden data-i18n="ssml.experimental">Experimental</small></div>
           <div class="composer-actions">
             <span class="text-metrics" id="text-metrics" data-i18n="composer.zeroCharacters">0 characters</span>
-            <div class="segmented-control input-type-control" role="group" aria-label="Input format">
+            <div class="segmented-control input-type-control" role="group" aria-label="Input format" data-i18n-aria-label="composer.inputFormat">
               <button type="button" data-input-type="magic" aria-pressed="false" data-i18n="magic.title">Magic</button>
               <button type="button" class="active" data-input-type="text" aria-pressed="true" data-i18n="composer.text">Text</button>
               <button type="button" data-input-type="ssml" aria-pressed="false">SSML</button>

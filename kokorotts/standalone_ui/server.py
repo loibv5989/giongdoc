@@ -60,7 +60,7 @@ def _snapshot_build_details(version_text: str) -> str:
 @lru_cache(maxsize=1)
 def _locale_manifest() -> dict[str, object]:
     manifest = json.loads(LOCALE_MANIFEST_PATH.read_text(encoding="utf-8"))
-    default_locale = str(manifest.get("defaultLocale") or "en")
+    default_locale = str(manifest.get("defaultLocale") or "vi")
     locales = manifest.get("locales")
     if not isinstance(locales, list) or not locales:
         raise ValueError("UI locale manifest must define at least one locale.")
@@ -109,7 +109,7 @@ def _index_response(locale: str) -> HTMLResponse:
             {key: item[key] for key in ("code", "name", "path", "direction", "browserLanguage")}
             for item in manifest["locales"]
         ],
-        "storageKey": "kokorotts-ui-locale-v1",
+        "storageKey": "solqi-tts-ui-locale-v2",
         "messages": _locale_catalog(locale),
     }
     bootstrap_json = json.dumps(bootstrap, ensure_ascii=False, separators=(",", ":")).replace("<", "\\u003c")
@@ -127,6 +127,8 @@ def _index_response(locale: str) -> HTMLResponse:
         .replace("{{UI_LOCALE}}", html.escape(locale))
         .replace("{{UI_DIRECTION}}", str(locale_entry["direction"]))
         .replace("{{UI_BOOTSTRAP}}", bootstrap_json)
+        .replace("{{UI_TITLE}}", html.escape(bootstrap["messages"]["app.title"]))
+        .replace("{{UI_DESCRIPTION}}", html.escape(bootstrap["messages"]["app.description"], quote=True))
     )
     return HTMLResponse(rendered_html, headers={"Cache-Control": "no-cache"})
 

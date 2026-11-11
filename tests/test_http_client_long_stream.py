@@ -74,7 +74,7 @@ class HttpClientServerSmokeTest(unittest.TestCase):
 
     def test_tts_defaults_returns_default_request_values(self) -> None:
         defaults = self.client.defaults()
-        self.assertEqual(defaults["voice"], "af_heart")
+        self.assertEqual(defaults["voice"], "diem_trinh")
         self.assertEqual(defaults["audio_controls"]["tempo"], 1.0)
 
     def test_tts_formats_lists_output_formats(self) -> None:

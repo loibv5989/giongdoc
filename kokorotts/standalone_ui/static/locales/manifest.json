@@ -1,6 +1,7 @@
 {
-  "defaultLocale": "en",
+  "defaultLocale": "vi",
   "locales": [
+    { "code": "vi", "name": "Tiếng Việt", "browserLanguage": "vi-VN", "direction": "ltr" },
     { "code": "en", "name": "English", "browserLanguage": "en-US", "direction": "ltr" },
     { "code": "pl", "name": "Polski", "browserLanguage": "pl-PL", "direction": "ltr" },
     { "code": "ja", "name": "日本語", "browserLanguage": "ja-JP", "direction": "ltr" },

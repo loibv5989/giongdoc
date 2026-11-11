@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import html
 import json
 import re
 import time
@@ -102,12 +103,12 @@ class StandaloneUiTests(unittest.TestCase):
                 icon_stylesheet = client.get("/static/vendor/lucide/lucide.css")
                 icon_font = client.get("/static/vendor/lucide/lucide.woff2")
                 product_logo = client.get("/assets/solqi-tts.webp")
-                favicon = client.get("/assets/kokoro_favicon.webp")
+                favicon = client.get("/assets/favicon-32x32.png")
                 gpu = client.get("/system/gpu")
                 api = client.get("/tts/ping")
 
         self.assertEqual(index.status_code, 200)
-        self.assertIn("KokoroTTS", index.text)
+        self.assertIn("<title>SolQi-TTS - Chuyển văn bản thành giọng nói</title>", index.text)
         self.assertIn('class="labs-signature" href="/"', index.text)
         self.assertIn('data-tab="generate"', index.text)
         self.assertIn('data-tab="stream"', index.text)
@@ -127,7 +128,7 @@ class StandaloneUiTests(unittest.TestCase):
         self.assertIn('&lt;lang xml:lang="en-US"&gt;', index.text)
         self.assertIn('&lt;prosody speed="0.9" pitch="+2st"', index.text)
         self.assertIn('src="/assets/solqi-tts.webp"', index.text)
-        self.assertIn('href="/assets/kokoro_favicon.webp"', index.text)
+        self.assertIn('href="/assets/favicon-32x32.png"', index.text)
         self.assertIn('class="labs-signature"', index.text)
         self.assertIn('href="mailto:contact@solqi.net"', index.text)
         self.assertIn('class="brand-contact"', index.text)
@@ -152,17 +153,19 @@ class StandaloneUiTests(unittest.TestCase):
         self.assertNotIn("{{UI_LOCALE}}", index.text)
         self.assertNotIn("{{UI_DIRECTION}}", index.text)
         self.assertNotIn("{{UI_BOOTSTRAP}}", index.text)
-        self.assertIn('<html lang="en" dir="ltr">', index.text)
+        self.assertNotIn("{{UI_TITLE}}", index.text)
+        self.assertNotIn("{{UI_DESCRIPTION}}", index.text)
+        self.assertIn('<html lang="vi" dir="ltr">', index.text)
         self.assertIn('id="ui-locale"', index.text)
-        self.assertIn('"locale":"en"', index.text)
-        self.assertIn('"messages":{"app.title":"KokoroTTS"', index.text)
+        self.assertIn('"locale":"vi"', index.text)
+        self.assertIn('"messages":{"app.title":"SolQi-TTS - Chuyển văn bản thành giọng nói"', index.text)
         self.assertNotIn("gradio", index.text.lower())
         self.assertEqual(script.status_code, 200)
         self.assertEqual(translations.status_code, 200)
         self.assertIn("localStorage.setItem(bootstrap.storageKey", translations.text)
         self.assertIn("window.location.assign", translations.text)
         self.assertEqual(locale_manifest.status_code, 200)
-        self.assertEqual(locale_manifest.json()["defaultLocale"], "en")
+        self.assertEqual(locale_manifest.json()["defaultLocale"], "vi")
         self.assertIn("AbortController", script.text)
         self.assertIn("/tts/generate", script.text)
         self.assertIn("/tts/stream", script.text)
@@ -218,7 +221,7 @@ class StandaloneUiTests(unittest.TestCase):
         self.assertEqual(product_logo.status_code, 200)
         self.assertEqual(product_logo.headers["content-type"], "image/webp")
         self.assertEqual(favicon.status_code, 200)
-        self.assertEqual(favicon.headers["content-type"], "image/webp")
+        self.assertEqual(favicon.headers["content-type"], "image/png")
         self.assertEqual(gpu.status_code, 200)
         self.assertIn("gpus", gpu.json())
         self.assertIn("history", gpu.json())
@@ -227,7 +230,7 @@ class StandaloneUiTests(unittest.TestCase):
         self.assertEqual(api.json(), {"msg": "pong"})
 
     def test_supported_locale_routes_and_catalogs_are_complete(self) -> None:
-        expected_locales = ("en", "pl", "ja", "zh", "es", "de")
+        expected_locales = ("vi", "en", "pl", "ja", "zh", "es", "de")
         english = json.loads((LOCALES_DIR / "en.json").read_text(encoding="utf-8"))
         static_dir = LOCALES_DIR.parent
         referenced_keys = set(
@@ -251,12 +254,18 @@ class StandaloneUiTests(unittest.TestCase):
                 self.assertEqual(response.status_code, 200, locale)
                 self.assertIn(f'<html lang="{locale}" dir="ltr">', response.text)
                 self.assertIn(f'"locale":"{locale}"', response.text)
-                self.assertIn('"messages":{"app.title":"KokoroTTS"', response.text)
 
                 catalog_response = client.get(f"/static/locales/{locale}.json")
                 self.assertEqual(catalog_response.status_code, 200, locale)
                 catalog = catalog_response.json()
                 self.assertEqual(set(catalog), set(english), locale)
+                self.assertIn(f'<title>{html.escape(catalog["app.title"])}</title>', response.text)
+                self.assertIn(f'<meta name="description" content="{html.escape(catalog["app.description"], quote=True)}">', response.text)
+                for key, value in catalog.items():
+                    self.assertEqual(sorted(re.findall(r"\{[a-zA-Z0-9_]+\}", value)), sorted(re.findall(r"\{[a-zA-Z0-9_]+\}", english[key])), f"{locale}:{key}")
+                if locale == "vi":
+                    self.assertEqual(catalog["app.title"], "SolQi-TTS - Chuyển văn bản thành giọng nói")
+                    self.assertTrue(150 <= len(catalog["app.description"]) <= 170)
                 self.assertTrue(all(isinstance(value, str) and value for value in catalog.values()), locale)
 
             self.assertEqual(client.get("/jp").status_code, 404)
@@ -392,7 +401,7 @@ class StandaloneUiTests(unittest.TestCase):
             with TestClient(create_app(api_app=self.backend_app())) as client:
                 index = client.get("/ja")
                 stylesheet = client.get("/static/styles.css")
-                logo = client.get("/assets/kokoro_favicon.webp")
+                logo = client.get("/assets/favicon-32x32.png")
 
         self.assertEqual(index.headers["cache-control"], "no-store")
         self.assertEqual(stylesheet.headers["cache-control"], "no-store")

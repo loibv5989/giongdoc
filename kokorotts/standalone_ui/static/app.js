@@ -1214,7 +1214,8 @@ function updateRuntime(status) {
     { value: 'cpu', label: 'CPU' },
   ]
   const selectedDevice = $('#device').value || state.defaults?.device || 'auto'
-  setSelectOptions($('#device'), devices, selectedDevice)
+  const localizedDevices = devices.map((device) => device.value === 'auto' ? { ...device, label: t('common.auto') } : device)
+  setSelectOptions($('#device'), localizedDevices, selectedDevice)
 }
 
 async function loadWorkspace() {

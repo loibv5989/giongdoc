@@ -12,6 +12,7 @@ from fastapi.testclient import TestClient
 from kokorotts.api import api, openai_speed_controls
 from kokorotts.natural_chunking import ChunkingValidationError
 from kokorotts.settings import RuntimeSettingsStore
+from kokorotts.sample_texts import get_intro_text
 
 
 class OpenAICompatibilityApiTests(unittest.TestCase):
@@ -189,6 +190,21 @@ class OpenAICompatibilityApiTests(unittest.TestCase):
         self.assertEqual(canonical.status_code, 200)
         self.assertEqual(legacy.status_code, 200)
         self.assertEqual(purge.call_count, 2)
+
+    def test_native_defaults_prefer_available_vietnamese_voice_and_matching_sample(self) -> None:
+        cases = [
+            (["af_heart", "diem_trinh", "hung_thinh"], "diem_trinh"),
+            (["af_heart", "hung_thinh"], "hung_thinh"),
+            (["zf_008", "af_heart"], "af_heart"),
+            (["zf_008"], "zf_008"),
+        ]
+        for served_voices, expected_voice in cases:
+            with self.subTest(voices=served_voices), patch("kokorotts.api.RUNTIME") as runtime:
+                runtime.served_voices = served_voices
+                response = self.client.get("/tts/defaults")
+                self.assertEqual(response.status_code, 200)
+                self.assertEqual(response.json()["voice"], expected_voice)
+                self.assertEqual(response.json()["text"], get_intro_text(expected_voice))
 
     def test_native_input_type_defaults_to_plain_text(self) -> None:
         defaults = self.client.get("/tts/defaults")
