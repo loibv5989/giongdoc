@@ -75,6 +75,7 @@ FROM base AS app-builder
 COPY pyproject.toml README.md LICENSE THIRD_PARTY_NOTICES.md VERSION /app/
 COPY kokorotts /app/kokorotts
 COPY assets/kokoro_favicon.webp assets/kokoro_logo_horizontal.webp assets/hangrylabs_logo.webp /app/assets/
+COPY assets/solqi-tts.webp /app/assets/
 
 RUN mkdir -p /app/persistent/app /app/persistent/models/huggingface \
     && python -m pip install -e . --no-deps

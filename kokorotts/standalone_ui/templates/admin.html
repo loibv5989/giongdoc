@@ -1,0 +1,67 @@
+<!doctype html>
+<html lang="vi">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="robots" content="noindex, nofollow">
+  <title>Quản trị · SolQi-TTS</title>
+  <link rel="icon" type="image/webp" href="/assets/kokoro_favicon.webp">
+  <link rel="stylesheet" href="/static/styles.css">
+  <script type="module" src="/static/admin.js"></script>
+</head>
+<body class="admin-page" data-admin-view="{{ADMIN_VIEW}}">
+  <header class="brand-hero">
+    <div class="labs-branding"><a class="labs-signature" href="/" aria-label="SolQi-TTS"><img class="labs-logo" src="/assets/solqi-tts.webp" alt="SolQi-TTS"></a></div>
+    <div class="header-actions"><a class="secondary-button admin-home" href="/">Trang đọc</a></div>
+  </header>
+
+  <main class="admin-main">
+    <section class="admin-login admin-card" {{LOGIN_HIDDEN}}>
+      <h1>Đăng nhập quản trị</h1>
+      <p class="admin-message" {{SETUP_HIDDEN}}>Tài khoản quản trị chưa được thiết lập.</p>
+      <form id="admin-login-form">
+        <label class="field"><span>Tên đăng nhập</span><input id="admin-username" name="username" autocomplete="username" maxlength="64" required {{LOGIN_DISABLED}}></label>
+        <label class="field"><span>Mật khẩu</span><input id="admin-password" name="password" type="password" autocomplete="current-password" maxlength="1024" required {{LOGIN_DISABLED}}></label>
+        <p class="admin-message" id="admin-login-error" role="alert" hidden></p>
+        <button class="primary-button" id="admin-login-button" type="submit" {{LOGIN_DISABLED}}>Đăng nhập</button>
+      </form>
+    </section>
+
+    <section class="admin-dashboard" {{DASHBOARD_HIDDEN}}>
+      <div class="admin-toolbar">
+        <h1>Quản trị</h1>
+        <div class="admin-toolbar-actions"><span id="admin-session-name"></span><button class="secondary-button" id="admin-logout" type="button">Đăng xuất</button></div>
+      </div>
+      <p class="admin-message" id="admin-error" role="alert" hidden></p>
+
+      <section class="admin-card" aria-labelledby="admin-status-heading">
+        <div class="admin-toolbar"><h2 id="admin-status-heading">Dịch vụ</h2><button class="secondary-button" id="admin-refresh" type="button">Cập nhật</button></div>
+        <dl class="admin-stats">
+          <div><dt>Trạng thái</dt><dd id="admin-service-state">Đang tải</dd></div>
+          <div><dt>Thiết bị</dt><dd id="admin-device">—</dd></div>
+          <div><dt>Giọng đang bật</dt><dd id="admin-voice-count">—</dd></div>
+          <div><dt>Model trong bộ nhớ</dt><dd id="admin-model-count">—</dd></div>
+        </dl>
+        <div class="admin-loaded-models"><h3>Model đang nạp</h3><ul id="admin-loaded-models"></ul></div>
+      </section>
+
+      <section class="admin-card" aria-labelledby="admin-models-heading">
+        <h2 id="admin-models-heading">Model và giọng đọc</h2>
+        <p class="admin-description">Chọn các nhóm giọng được sử dụng. Thay đổi áp dụng cho mọi yêu cầu đọc giọng.</p>
+        <form id="admin-models-form">
+          <div class="admin-model-groups" id="admin-model-groups"></div>
+          <p class="admin-message" id="admin-models-message" role="status" hidden></p>
+          <button class="primary-button" id="admin-save-models" type="submit" disabled>Lưu thay đổi</button>
+        </form>
+      </section>
+
+      <section class="admin-card" aria-labelledby="admin-memory-heading">
+        <h2 id="admin-memory-heading">Bộ nhớ</h2>
+        <p class="admin-description">Giải phóng các model đang nạp. Model sẽ được nạp lại khi có yêu cầu đọc.</p>
+        <button class="secondary-button" id="admin-purge" type="button">Giải phóng model</button>
+        <p class="admin-message" id="admin-purge-message" role="status" hidden></p>
+      </section>
+    </section>
+  </main>
+</body>
+</html>

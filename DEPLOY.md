@@ -52,3 +52,29 @@ pm2 start ecosystem.config.cjs
 ## Cập nhật
 
 Cập nhật mã bằng Git. Cài lại thư viện khi các file khai báo thư viện thay đổi. Sau khi sửa Python hoặc cấu hình chạy, khởi động lại tiến trình `kokorotts`. Giữ thư mục `persistent/` khi cập nhật mã nguồn.
+
+## Quản trị
+
+Trang quản trị nằm tại `/admin`. Bản này dùng 1 tài khoản, không cần database. Tài khoản và các phiên đăng nhập nằm trong `persistent/app/admin.json`, được ghi với quyền `0600`; mật khẩu lưu bằng scrypt, mã phiên chỉ lưu dạng băm. File này phải ở ngoài Git.
+
+Tạo tài khoản dưới user chạy ứng dụng, trong thư mục repository:
+
+```sh
+.venv/bin/python -m kokorotts.admin_auth create --username admin --path persistent/app/admin.json
+```
+
+Lệnh yêu cầu nhập mật khẩu 2 lần, tối thiểu 12 ký tự. Có thể dùng `--generate` để tạo mật khẩu ngẫu nhiên; thông tin đăng nhập được ghi vào file `persistent/app/admin-initial.txt` với quyền `0600`. Cất thông tin này ở nơi riêng sau khi đã đăng nhập.
+
+Đặt lại tài khoản/mật khẩu bằng terminal:
+
+```sh
+.venv/bin/python -m kokorotts.admin_auth reset --username admin --path persistent/app/admin.json
+```
+
+Đặt lại mật khẩu thu hồi toàn bộ phiên cũ. Phiên đăng nhập có thời hạn 8 giờ, dùng cookie HttpOnly/SameSite Strict và thêm Secure trên HTTPS. Đăng nhập bằng HTTP chỉ được chấp nhận từ loopback tại localhost để phát triển local. Các yêu cầu thay đổi cấu hình cần mã CSRF và phải cùng nguồn với trang quản trị.
+
+Nếu dùng `KOKOROTTS_ADMIN_PATH` hoặc đặt file cấu hình runtime ở nơi khác, truyền `--path` đúng với đường dẫn tài khoản mà ứng dụng sử dụng. Không có tài khoản tạo sẵn, mật khẩu mặc định hay chức năng tạo tài khoản qua web.
+
+Trang admin gọi `/admin/api/*`; các đường dẫn này cần được proxy tới ứng dụng qua HTTPS. Có thể tiếp tục giữ các đường dẫn đọc giọng `/tts/*`, `/v1/*` và MCP trong mạng nội bộ như cấu hình Nginx hiện tại. Những API quản trị cũ dưới `/system/*` và alias `/tts/purge` cũng kiểm tra phiên đăng nhập; các thao tác ghi cần CSRF. API đọc giọng thông thường không yêu cầu phiên quản trị và vẫn hoạt động với WordPress trên cùng máy.
+
+`KOKOROTTS_API_KEY` vẫn chỉ áp dụng cho API tương thích OpenAI, không thay thế đăng nhập quản trị. MCP giữ cơ chế và phạm vi truy cập nội bộ của bản nguồn; không công khai MCP qua reverse proxy.

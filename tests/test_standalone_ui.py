@@ -12,7 +12,6 @@ from fastapi.testclient import TestClient
 
 from kokorotts.standalone_ui.gpu import GpuMonitor, read_gpu_stats
 from kokorotts.standalone_ui.server import (
-    _read_version_file,
     _snapshot_build_details,
     create_app,
 )
@@ -81,39 +80,14 @@ class StandaloneUiTests(unittest.TestCase):
         self.assertIn(b'OpusHead', audio.read_bytes()[:100])
         self.assertEqual(picture.read_bytes()[8:12], b'WEBP')
 
-    def test_snapshot_badge_identifies_image_build_but_release_badge_stays_concise(self) -> None:
+    def test_snapshot_build_details_only_apply_to_snapshots(self) -> None:
         metadata = {
             "KOKOROTTS_BUILD_DATE": "2026-10-05T13:47:26Z",
             "KOKOROTTS_VCS_REF": "1234567890abcdef",
         }
         with patch.dict("os.environ", metadata, clear=False):
-            self.assertEqual(
-                _snapshot_build_details("1.0-snapshot"),
-                "2026-10-05 13:47 UTC · 1234567890ab",
-            )
+            self.assertEqual(_snapshot_build_details("1.0-snapshot"), "2026-10-05 13:47 UTC · 1234567890ab")
             self.assertEqual(_snapshot_build_details("1.0"), "")
-
-            with patch(
-                "kokorotts.standalone_ui.server._read_version_file",
-                return_value="1.0-snapshot",
-            ):
-                with TestClient(create_app(api_app=self.backend_app())) as client:
-                    snapshot = client.get("/")
-
-            with patch(
-                "kokorotts.standalone_ui.server._read_version_file",
-                return_value="1.0",
-            ):
-                with TestClient(create_app(api_app=self.backend_app())) as client:
-                    release = client.get("/")
-
-        self.assertIn("UI v1.0-snapshot", snapshot.text)
-        self.assertIn(
-            '<span class="runtime-build">2026-10-05 13:47 UTC · 1234567890ab</span>',
-            snapshot.text,
-        )
-        self.assertIn("UI v1.0", release.text)
-        self.assertNotIn('class="runtime-build"', release.text)
 
     def test_static_workspace_and_api_are_available(self) -> None:
         gpu_payload = {"gpus": [], "history": {}, "sample_interval_seconds": 1, "idle_timeout_seconds": 60}
@@ -127,18 +101,14 @@ class StandaloneUiTests(unittest.TestCase):
                 audio_editor = client.get("/static/audio-editor.js")
                 icon_stylesheet = client.get("/static/vendor/lucide/lucide.css")
                 icon_font = client.get("/static/vendor/lucide/lucide.woff2")
-                product_logo = client.get("/assets/kokoro_logo_horizontal.webp")
+                product_logo = client.get("/assets/solqi-tts.webp")
                 favicon = client.get("/assets/kokoro_favicon.webp")
-                labs_logo = client.get("/assets/hangrylabs_logo.webp")
                 gpu = client.get("/system/gpu")
                 api = client.get("/tts/ping")
 
         self.assertEqual(index.status_code, 200)
         self.assertIn("KokoroTTS", index.text)
-        self.assertIn("https://hangry-labs.github.io/kokoroTTS/examples/?lang=en", index.text)
-        self.assertIn('href="https://hangrylabs.app/"', index.text)
-        stale_home = "https://hangrylabs.app/" + "software"
-        self.assertNotIn(f'href="{stale_home}"', index.text)
+        self.assertIn('class="labs-signature" href="/"', index.text)
         self.assertIn('data-tab="generate"', index.text)
         self.assertIn('data-tab="stream"', index.text)
         self.assertNotIn('data-tab="settings"', index.text)
@@ -156,18 +126,11 @@ class StandaloneUiTests(unittest.TestCase):
         self.assertIn('&lt;voice name="af_heart"&gt;', index.text)
         self.assertIn('&lt;lang xml:lang="en-US"&gt;', index.text)
         self.assertIn('&lt;prosody speed="0.9" pitch="+2st"', index.text)
-        self.assertIn('src="/assets/kokoro_logo_horizontal.webp"', index.text)
+        self.assertIn('src="/assets/solqi-tts.webp"', index.text)
         self.assertIn('href="/assets/kokoro_favicon.webp"', index.text)
-        self.assertIn('class="collapsed-mascot"', index.text)
         self.assertIn('class="labs-signature"', index.text)
-        self.assertIn('href="mailto:contact@hangrylabs.app"', index.text)
+        self.assertIn('href="mailto:contact@solqi.net"', index.text)
         self.assertIn('class="brand-contact"', index.text)
-        self.assertIn('src="/assets/hangrylabs_logo.webp"', index.text)
-        self.assertNotIn('src="/assets/hangrylabs_logo_horizontal.webp"', index.text)
-        self.assertLess(index.text.index('class="labs-signature"'), index.text.index('class="collapsed-mascot"'))
-        self.assertIn('href="https://github.com/hangry-labs/kokoroTTS/releases"', index.text)
-        self.assertIn('id="hero-toggle"', index.text)
-        self.assertIn("document.documentElement.dataset.headerCollapsed = 'true'", index.text)
         self.assertNotIn('/assets/banner.jpg', index.text)
         self.assertNotIn('class="brand-lockup"', index.text)
         self.assertNotIn("product-highlight", index.text)
@@ -184,7 +147,6 @@ class StandaloneUiTests(unittest.TestCase):
         self.assertLess(index.text.index('id="generate-output"'), index.text.index('id="output-format"'))
         self.assertLess(index.text.index('id="tokenize-button"'), index.text.index('id="text-input"'))
         self.assertLess(index.text.index('id="stream-start"'), index.text.index('id="stream-output"'))
-        self.assertIn(f"UI v{_read_version_file()}", index.text)
         self.assertNotIn("{{UI_VERSION}}", index.text)
         self.assertNotIn("{{UI_BUILD_DETAILS}}", index.text)
         self.assertNotIn("{{UI_LOCALE}}", index.text)
@@ -218,10 +180,6 @@ class StandaloneUiTests(unittest.TestCase):
         self.assertIn("ssmlDialog.showModal()", script.text)
         self.assertIn("state.plainTextDraft", script.text)
         self.assertIn("state.ssmlDraft", script.text)
-        self.assertIn("function setHeroCollapsed(", script.text)
-        self.assertIn("headerCollapsed: state.headerCollapsed", script.text)
-        self.assertIn("document.documentElement.dataset.headerCollapsed", script.text)
-        self.assertIn("hero.animate(", script.text)
         self.assertIn("function renderJsonTree(", script.text)
         self.assertIn("/system/settings/model-families", script.text)
         self.assertIn("/system/settings/mcp", script.text)
@@ -241,12 +199,9 @@ class StandaloneUiTests(unittest.TestCase):
         self.assertEqual(stylesheet.status_code, 200)
         self.assertIn("labs-signature-pulse", stylesheet.text)
         self.assertNotIn("offset-path", stylesheet.text)
-        self.assertIn(".runtime-copy span { display: block", stylesheet.text)
         self.assertIn(".ssml-mode-button.active", stylesheet.text)
         self.assertIn("@keyframes ssml-active-pulse", stylesheet.text)
         self.assertIn(".ssml-dialog::backdrop", stylesheet.text)
-        self.assertIn("@media (min-width: 1101px)", stylesheet.text)
-        self.assertIn(".brand-hero { height: 237px; min-height: 237px; }", stylesheet.text)
         self.assertEqual(audio_editor.status_code, 200)
         self.assertIn("WaveSurfer", audio_editor.text)
         self.assertEqual(icon_stylesheet.status_code, 200)
@@ -264,8 +219,6 @@ class StandaloneUiTests(unittest.TestCase):
         self.assertEqual(product_logo.headers["content-type"], "image/webp")
         self.assertEqual(favicon.status_code, 200)
         self.assertEqual(favicon.headers["content-type"], "image/webp")
-        self.assertEqual(labs_logo.status_code, 200)
-        self.assertEqual(labs_logo.headers["content-type"], "image/webp")
         self.assertEqual(gpu.status_code, 200)
         self.assertIn("gpus", gpu.json())
         self.assertIn("history", gpu.json())
@@ -299,10 +252,6 @@ class StandaloneUiTests(unittest.TestCase):
                 self.assertIn(f'<html lang="{locale}" dir="ltr">', response.text)
                 self.assertIn(f'"locale":"{locale}"', response.text)
                 self.assertIn('"messages":{"app.title":"KokoroTTS"', response.text)
-                self.assertIn(
-                    f"https://hangry-labs.github.io/kokoroTTS/examples/?lang={locale}",
-                    response.text,
-                )
 
                 catalog_response = client.get(f"/static/locales/{locale}.json")
                 self.assertEqual(catalog_response.status_code, 200, locale)

@@ -9,7 +9,7 @@ const $$ = (selector, root = document) => [...root.querySelectorAll(selector)]
 
 const state = {
   activeTab: 'generate',
-  headerCollapsed: false,
+  adminAuthenticated: false,
   defaults: null,
   status: null,
   voices: [],
@@ -22,7 +22,6 @@ const state = {
   gpuTimer: null,
   gpuRefreshActive: false,
   gpuHovering: false,
-  headerAnimation: null,
   inputType: 'text',
   plainTextDraft: '',
   ssmlDraft: '',
@@ -46,6 +45,7 @@ const GPU_METRICS = [
 const generateOutput = new AudioEditor($('#generate-output'), { label: t('editor.generatedAudio') })
 const streamOutput = new AudioEditor($('#stream-output'), { label: t('editor.streamedAudio') })
 let studio = null
+let adminSessionCheck = 0
 
 function setStatus(message, tone = 'neutral') {
   const status = $('#global-status')
@@ -79,7 +79,18 @@ async function responseError(response) {
 }
 
 async function fetchJson(path, options) {
+  const operatorRequest = path.startsWith('/system/') || path === '/tts/purge'
+  if (operatorRequest && !['GET', 'HEAD'].includes((options?.method || 'GET').toUpperCase())) {
+    const sessionResponse = await fetch('/admin/api/session', { cache: 'no-store' })
+    if (sessionResponse.status === 401) setAdminAccess(false)
+    if (!sessionResponse.ok) throw new Error(await responseError(sessionResponse))
+    const session = await sessionResponse.json()
+    const headers = new Headers(options?.headers)
+    headers.set('X-CSRF-Token', session.csrf_token)
+    options = { ...options, headers }
+  }
   const response = await fetch(path, options)
+  if (operatorRequest && response.status === 401) setAdminAccess(false)
   if (!response.ok) throw new Error(await responseError(response))
   return response.json()
 }
@@ -96,7 +107,6 @@ function persistUiSession() {
   try {
     sessionStorage.setItem(UI_SESSION_KEY, JSON.stringify({
       activeTab: state.activeTab,
-      headerCollapsed: state.headerCollapsed,
       gpuWindowMs: state.gpuWindowMs,
     }))
   } catch {
@@ -119,7 +129,6 @@ function persistGpuSession() {
 function restoreSessionState() {
   const ui = readSessionJson(UI_SESSION_KEY)
   if (['generate', 'stream', 'api', 'system'].includes(ui?.activeTab)) state.activeTab = ui.activeTab
-  if (typeof ui?.headerCollapsed === 'boolean') state.headerCollapsed = ui.headerCollapsed
   if ([60 * 1000, 10 * 60 * 1000].includes(ui?.gpuWindowMs)) state.gpuWindowMs = ui.gpuWindowMs
 
   const cached = readSessionJson(GPU_SESSION_KEY)
@@ -135,45 +144,48 @@ function restoreSessionState() {
   })
 }
 
-function setHeroCollapsed(collapsed, persist = true, animate = true) {
-  const hero = $('#brand-hero')
-  const toggle = $('#hero-toggle')
-  state.headerAnimation?.cancel()
-  const startHeight = hero.getBoundingClientRect().height
-
-  state.headerCollapsed = collapsed
-  const action = collapsed ? t('hero.expand') : t('hero.collapse')
-  document.documentElement.dataset.headerCollapsed = String(collapsed)
-  hero.dataset.collapsed = String(collapsed)
-  toggle.setAttribute('aria-expanded', String(!collapsed))
-  toggle.setAttribute('aria-label', action)
-  toggle.title = action
-  toggle.querySelector('i').className = collapsed ? 'icon-chevron-down' : 'icon-chevron-up'
-
-  const endHeight = hero.getBoundingClientRect().height
-  const reducedMotion = window.matchMedia('(prefers-reduced-motion: reduce)').matches
-  if (animate && !reducedMotion && Math.abs(startHeight - endHeight) > 1) {
-    hero.classList.add('is-rolling')
-    const animation = hero.animate(
-      [{ height: `${startHeight}px` }, { height: `${endHeight}px` }],
-      { duration: 320, easing: 'cubic-bezier(0.22, 1, 0.36, 1)', fill: 'both' },
-    )
-    state.headerAnimation = animation
-    animation.finished
-      .catch(() => {})
-      .finally(() => {
-        if (state.headerAnimation !== animation) return
-        hero.classList.remove('is-rolling')
-        state.headerAnimation = null
-        animation.cancel()
-      })
-  }
-  if (persist) persistUiSession()
+function setAdminAccess(authenticated) {
+  adminSessionCheck += 1
+  state.adminAuthenticated = authenticated
+  $$('[data-admin-only]').forEach((element) => { element.hidden = !authenticated })
+  if (!authenticated && ['api', 'system'].includes(state.activeTab)) activateTab('generate')
 }
 
-$('#hero-toggle').addEventListener('click', () => setHeroCollapsed(!state.headerCollapsed))
+async function refreshAdminSession() {
+  const check = ++adminSessionCheck
+  try {
+    const response = await fetch('/admin/api/session', { credentials: 'same-origin', cache: 'no-store' })
+    if (check === adminSessionCheck) setAdminAccess(response.ok)
+  } catch {
+    if (check === adminSessionCheck) setAdminAccess(false)
+  }
+}
+
+$('#workspace-logout').addEventListener('click', async (event) => {
+  const button = event.currentTarget
+  button.disabled = true
+  try {
+    const sessionResponse = await fetch('/admin/api/session', { credentials: 'same-origin', cache: 'no-store' })
+    if (sessionResponse.status === 401) {
+      setAdminAccess(false)
+      return
+    }
+    if (!sessionResponse.ok) throw new Error(t('auth.logoutFailed'))
+    const session = await sessionResponse.json()
+    const response = await fetch('/admin/api/logout', {
+      method: 'POST', headers: { 'X-CSRF-Token': session.csrf_token }, credentials: 'same-origin', cache: 'no-store',
+    })
+    if (!response.ok && response.status !== 401) throw new Error(t('auth.logoutFailed'))
+    setAdminAccess(false)
+  } catch {
+    showToast(t('auth.logoutFailed'))
+  } finally {
+    button.disabled = false
+  }
+})
 
 function activateTab(name) {
+  if (['api', 'system'].includes(name) && !state.adminAuthenticated) name = 'generate'
   state.activeTab = name
   persistUiSession()
   $$('.tab-button').forEach((button) => {
@@ -1196,12 +1208,7 @@ function renderJsonTree(container, value, expandDepth = 1) {
 $('#api-refresh').addEventListener('click', refreshApiStatus)
 
 function updateRuntime(status) {
-  const badge = $('#runtime-badge')
   state.status = status
-  badge.dataset.state = 'ready'
-  badge.querySelector('strong').textContent = t('runtime.ready')
-  $('#runtime-model').textContent = `${status.repo_id} / ${status.runtime}`
-  badge.title = `${status.repo_id} / ${status.runtime}`
   const devices = status.hardware || [
     { value: 'auto', label: t('common.auto') },
     { value: 'cpu', label: 'CPU' },
@@ -1254,13 +1261,10 @@ async function loadWorkspace() {
 
 async function pollReadiness() {
   try {
-    updateRuntime(await fetchJson('/tts/status'))
+    const [status] = await Promise.all([fetchJson('/tts/status'), refreshAdminSession()])
+    updateRuntime(status)
   } catch {
-    const badge = $('#runtime-badge')
-    badge.dataset.state = 'starting'
-    badge.querySelector('strong').textContent = t('runtime.starting')
-    $('#runtime-model').textContent = t('runtime.waiting')
-    badge.title = t('runtime.waiting')
+    // Retry on the next poll while the service is unavailable.
   }
   setTimeout(pollReadiness, 15000)
 }
@@ -1269,8 +1273,10 @@ document.addEventListener('audio-error', (event) => showToast(errorMessage(event
 document.addEventListener('visibilitychange', () => {
   if (document.hidden) {
     stopGpuMonitor()
-  } else if (state.activeTab === 'system') {
-    startGpuMonitor()
+  } else {
+    refreshAdminSession().then(() => {
+      if (state.activeTab === 'system') startGpuMonitor()
+    })
   }
 })
 window.addEventListener('beforeunload', () => {
@@ -1280,8 +1286,7 @@ window.addEventListener('beforeunload', () => {
 })
 
 restoreSessionState()
-setHeroCollapsed(state.headerCollapsed, false, false)
-loadWorkspace()
+Promise.all([loadWorkspace(), refreshAdminSession()])
   .then(async () => {
     studio = await createStudio({ state, requestPayload, fetchJson, responseError,
       showToast, errorMessage, setInputType, updateTextMetrics, output: generateOutput })
@@ -1292,4 +1297,4 @@ loadWorkspace()
     setStatus(t('status.connectionFailed'), 'error')
     showToast(errorMessage(error))
   })
-pollReadiness()
+setTimeout(pollReadiness, 15000)

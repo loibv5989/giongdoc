@@ -15,10 +15,8 @@
       if (location.pathname === '/' && savedEntry && savedEntry.code !== localeConfig.defaultLocale) {
         location.replace(`${savedEntry.path}${location.search}${location.hash}`)
       }
-      const savedUi = JSON.parse(sessionStorage.getItem('kokorotts-ui-state-v1') || 'null')
-      if (savedUi?.headerCollapsed) document.documentElement.dataset.headerCollapsed = 'true'
     } catch {
-      // Session storage may be unavailable in privacy-restricted browsers.
+      // Local storage may be unavailable in privacy-restricted browsers.
     }
   </script>
   <link rel="stylesheet" href="/static/vendor/lucide/lucide.css">
@@ -28,47 +26,37 @@
   <script type="module" src="/static/app.js"></script>
 </head>
 <body>
-  <header class="brand-hero" id="brand-hero" data-collapsed="false">
+  <header class="brand-hero" id="brand-hero">
     <div class="labs-branding">
-      <a class="labs-signature" href="https://hangrylabs.app/" target="_blank" rel="noreferrer" aria-label="Hangry Labs home" title="Hangry Labs home">
-        <span class="powered-label" data-i18n="brand.poweredBy">Powered by</span>
-        <img class="labs-logo" src="/assets/hangrylabs_logo.webp" alt="Hangry Labs">
+      <a class="labs-signature" href="/" aria-label="SolQi-TTS" title="SolQi-TTS">
+        <img class="labs-logo" src="/assets/solqi-tts.webp" alt="SolQi-TTS">
       </a>
-      <a class="brand-contact" href="mailto:contact@hangrylabs.app" aria-label="Email Hangry Labs at contact@hangrylabs.app" title="Email Hangry Labs at contact@hangrylabs.app" data-i18n-aria-label="brand.contactEmail" data-i18n-title="brand.contactEmail">
+    </div>
+    <div class="header-actions">
+      <a class="brand-contact" href="mailto:contact@solqi.net" aria-label="Email SolQi at contact@solqi.net" title="Email SolQi at contact@solqi.net" data-i18n-aria-label="brand.contactEmail" data-i18n-title="brand.contactEmail">
         <svg class="brand-contact-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false">
           <path d="M3.75 6.75h16.5v10.5H3.75z"></path>
           <path d="m4.5 7.5 7.5 5.75 7.5-5.75"></path>
           <path class="brand-contact-spark" d="M17.75 3.25h2.5M19 2v2.5"></path>
         </svg>
-        <span class="brand-contact-copy"><span data-i18n="brand.contactUs">Contact us:</span><strong>contact@hangrylabs.app</strong></span>
+        <span class="brand-contact-copy"><span data-i18n="brand.contactUs">Contact us:</span><strong>contact@solqi.net</strong></span>
       </a>
+      <label class="locale-picker header-locale"><span class="visually-hidden" data-i18n="locale.label">Interface language</span><select id="ui-locale" aria-label="Interface language" data-i18n-aria-label="locale.label"></select></label>
+      <button class="secondary-button header-logout" id="workspace-logout" type="button" data-admin-only hidden aria-label="Log out" title="Log out" data-i18n-aria-label="auth.logout" data-i18n-title="auth.logout">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false"><path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4M16 17l5-5-5-5M21 12H9"></path></svg>
+        <span class="header-logout-label" data-i18n="auth.logout">Log out</span>
+      </button>
     </div>
-    <img class="collapsed-mascot" src="/assets/kokoro_favicon.webp" alt="KokoroTTS mascot" data-i18n-alt="brand.mascotAlt">
-    <nav class="brand-nav" aria-label="Application links" data-i18n-aria-label="nav.aria">
-      <div class="brand-links">
-        <a class="primary-link" href="https://hangry-labs.github.io/kokoroTTS/examples/?lang={{UI_LOCALE}}" target="_blank" rel="noreferrer"><i class="icon-sparkles"></i><span data-i18n="nav.examples">Examples</span></a>
-        <a href="/tts/docs"><i class="icon-book-open"></i><span data-i18n="nav.apiDocs">API docs</span></a>
-        <a href="/tts/voices"><i class="icon-audio-lines"></i><span data-i18n="nav.voices">Voices</span></a>
-        <a href="https://github.com/Hangry-Labs/kokoroTTS" target="_blank" rel="noreferrer"><i class="icon-git-branch"></i><span data-i18n="nav.github">GitHub</span></a>
-        <label class="locale-picker"><span class="visually-hidden" data-i18n="locale.label">Interface language</span><select id="ui-locale" aria-label="Interface language" data-i18n-aria-label="locale.label"></select></label>
-      </div>
-    </nav>
-    <div class="brand-copy">
-      <h1><img class="product-logo" src="/assets/kokoro_logo_horizontal.webp" alt="KokoroTTS - Natural text-to-speech, browser UI, and API" data-i18n-alt="brand.productAlt"></h1>
-    </div>
-    <div class="runtime-badge" id="runtime-badge" data-state="starting">
-      <i class="icon-activity"></i>
-      <div class="runtime-copy"><strong data-i18n="runtime.starting">Inference starting</strong><span id="runtime-model" data-i18n="runtime.waiting">Waiting for inference service</span></div>
-      <a class="runtime-version" href="https://github.com/hangry-labs/kokoroTTS/releases" target="_blank" rel="noreferrer" title="Open KokoroTTS releases" data-i18n-title="runtime.openReleases"><span class="runtime-version-label">UI v{{UI_VERSION}}</span>{{UI_BUILD_DETAILS}}</a>
-    </div>
-    <button class="hero-toggle" id="hero-toggle" type="button" aria-controls="brand-hero" aria-expanded="true" aria-label="Collapse header" title="Collapse header" data-i18n-aria-label="hero.collapse" data-i18n-title="hero.collapse"><i class="icon-chevron-up"></i></button>
   </header>
 
-  <div class="app-tabs" role="tablist" aria-label="Workspace views" data-i18n-aria-label="tabs.aria">
-    <button class="tab-button active" type="button" role="tab" aria-selected="true" data-tab="generate" data-i18n="tabs.generate">Generate</button>
-    <button class="tab-button" type="button" role="tab" aria-selected="false" data-tab="stream" data-i18n="tabs.stream">Stream</button>
-    <button class="tab-button" type="button" role="tab" aria-selected="false" data-tab="api" data-i18n="tabs.api">API</button>
-    <button class="tab-button" type="button" role="tab" aria-selected="false" data-tab="system" data-i18n="tabs.system">System</button>
+  <div class="app-tabs">
+    <div class="workspace-tabs" role="tablist" aria-label="Workspace views" data-i18n-aria-label="tabs.aria">
+      <button class="tab-button active" type="button" role="tab" aria-selected="true" data-tab="generate" data-i18n="tabs.generate">Generate</button>
+      <button class="tab-button" type="button" role="tab" aria-selected="false" data-tab="stream" data-i18n="tabs.stream">Stream</button>
+      <button class="tab-button" type="button" role="tab" aria-selected="false" data-tab="api" data-admin-only hidden data-i18n="tabs.api">API</button>
+      <button class="tab-button" type="button" role="tab" aria-selected="false" data-tab="system" data-admin-only hidden data-i18n="tabs.system">System</button>
+    </div>
+    <a class="tab-link" href="/tts/docs" data-admin-only hidden><i class="icon-book-open" aria-hidden="true"></i><span data-i18n="nav.apiDocs">API docs</span></a>
   </div>
 
   <main class="workspace" data-view="generate">

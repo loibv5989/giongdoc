@@ -56,12 +56,14 @@ only-include = ["kokorotts"]
 only-packages = true
 artifacts = [
     "kokorotts/standalone_ui/static/**",
+    "kokorotts/standalone_ui/templates/**",
 ]
 
 [tool.hatch.build.targets.wheel.force-include]
 "assets/kokoro_favicon.webp" = "assets/kokoro_favicon.webp"
 "assets/kokoro_logo_horizontal.webp" = "assets/kokoro_logo_horizontal.webp"
 "assets/hangrylabs_logo.webp" = "assets/hangrylabs_logo.webp"
+"assets/solqi-tts.webp" = "assets/solqi-tts.webp"
 
 [project.urls]
 Homepage = "https://github.com/Hangry-Labs/kokoroTTS"
