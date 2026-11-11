@@ -45,11 +45,12 @@ function readCollapsedFolders() {
 
 export class DialogueScriptLibrary {
   constructor({
-    magicEditor, fetchJson, showToast, errorMessage, getInputType, setInputType,
+    magicEditor, fetchJson, fetchApi = fetch, showToast, errorMessage, getInputType, setInputType,
     onDocumentChange, captureWorkspace, restoreWorkspace, clearWorkspace,
   }) {
     this.magicEditor = magicEditor
     this.fetchJson = fetchJson
+    this.fetchApi = fetchApi
     this.showToast = showToast
     this.errorMessage = errorMessage
     this.getInputType = getInputType
@@ -196,7 +197,7 @@ export class DialogueScriptLibrary {
 
   async fetchAsset(asset) {
     if (!asset?.url) return null
-    const response = await fetch(asset.url, { cache: 'no-store' })
+    const response = await this.fetchApi(asset.url, { cache: 'no-store' })
     if (!response.ok) throw new Error(msg`Unable to load saved workspace audio (${response.status}).`)
     return { ...asset, blob: await response.blob() }
   }

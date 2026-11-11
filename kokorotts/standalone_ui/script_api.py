@@ -17,6 +17,7 @@ from ..audio import SAMPLE_RATE, encode_audio_bytes
 from ..ssml_h import parse_dialogue
 from . import dialogue_scripts as storage
 from .magic_api import StudioRoute
+from .web_gateway import browser_script_owner
 
 
 class ScriptRequest(BaseModel):
@@ -39,8 +40,12 @@ class FolderAssignment(BaseModel):
 def attach_scripts(app, root: Path):
     router = APIRouter(route_class=StudioRoute, tags=["Dialogue library"])
 
+    def script_root():
+        owner = browser_script_owner.get()
+        return root / "visitors" / owner if owner else root
+
     def payload(name, record, full=False):
-        loaded = storage.load_dialogue_workspace(root, record)
+        loaded = storage.load_dialogue_workspace(script_root(), record)
         manifest = loaded[0] if loaded else {}
         result = {
             "id": name,
@@ -57,7 +62,7 @@ def attach_scripts(app, root: Path):
             "download_url": f"/tts/dialogue-scripts/{name}/download",
         }
         if full:
-            result["document"] = storage.resolve_dialogue_script(root, name)[
+            result["document"] = storage.resolve_dialogue_script(script_root(), name)[
                 2
             ].read_text(encoding="utf-8")
 
@@ -95,14 +100,14 @@ def attach_scripts(app, root: Path):
 
     def save(request, existing=None):
         if existing is not None:
-            storage.resolve_dialogue_script(root, existing)
+            storage.resolve_dialogue_script(script_root(), existing)
             if storage.normalize_script_name(
                 request.name
             ) != storage.normalize_script_name(existing):
                 raise ValueError("Create a new script to use a different name.")
         turns, words = validate(request)
         name, record = storage.save_dialogue_script(
-            root,
+            script_root(),
             name=request.name,
             document=request.document,
             description=request.description,
@@ -118,11 +123,11 @@ def attach_scripts(app, root: Path):
     def scripts():
         records = [
             payload(n, r)
-            for n, r in sorted(storage.load_dialogue_scripts(root).items())
+            for n, r in sorted(storage.load_dialogue_scripts(script_root()).items())
         ]
         folders = [
             {"id": n, "name": r["title"], "created_at": r["created_at"]}
-            for n, r in storage.load_dialogue_folders(root).items()
+            for n, r in storage.load_dialogue_folders(script_root()).items()
         ]
         return {
             "object": "list",
@@ -133,12 +138,12 @@ def attach_scripts(app, root: Path):
 
     @router.post("/tts/dialogue-script-folders")
     def add_folder(request: FolderRequest):
-        name, record = storage.create_dialogue_folder(root, request.name)
+        name, record = storage.create_dialogue_folder(script_root(), request.name)
         return {"id": name, "name": record["title"], "created_at": record["created_at"]}
 
     @router.delete("/tts/dialogue-script-folders/{identity}")
     def delete_folder(identity: str):
-        return {"deleted": storage.delete_dialogue_folder(root, identity)}
+        return {"deleted": storage.delete_dialogue_folder(script_root(), identity)}
 
     @router.post("/tts/dialogue-scripts")
     def create(request: ScriptRequest):
@@ -146,7 +151,7 @@ def attach_scripts(app, root: Path):
 
     @router.get("/tts/dialogue-scripts/{identity}")
     def get(identity: str):
-        name, record, _ = storage.resolve_dialogue_script(root, identity)
+        name, record, _ = storage.resolve_dialogue_script(script_root(), identity)
         return payload(name, record, True)
 
     @router.put("/tts/dialogue-scripts/{identity}")
@@ -155,12 +160,12 @@ def attach_scripts(app, root: Path):
 
     @router.patch("/tts/dialogue-scripts/{identity}/folder")
     def move(identity: str, request: FolderAssignment):
-        name, record = storage.move_dialogue_script(root, identity, request.folder)
+        name, record = storage.move_dialogue_script(script_root(), identity, request.folder)
         return payload(name, record)
 
     @router.get("/tts/dialogue-scripts/{identity}/download")
     def download(identity: str):
-        name, _, path = storage.resolve_dialogue_script(root, identity)
+        name, _, path = storage.resolve_dialogue_script(script_root(), identity)
         return FileResponse(
             path, media_type="application/ssml+xml", filename=name + ".ssml"
         )
@@ -168,12 +173,12 @@ def attach_scripts(app, root: Path):
     @router.get("/tts/dialogue-scripts/{identity}/workspace/{filename}")
     def audio(identity: str, filename: str):
         return FileResponse(
-            storage.resolve_dialogue_workspace_asset(root, identity, filename)
+            storage.resolve_dialogue_workspace_asset(script_root(), identity, filename)
         )
 
     @router.delete("/tts/dialogue-scripts/{identity}")
     def delete(identity: str):
-        return {"deleted": storage.delete_dialogue_script(root, identity)}
+        return {"deleted": storage.delete_dialogue_script(script_root(), identity)}
 
     async def save_workspace(metadata, takes, output, processed, existing=None):
         if len(metadata) > 64000:
@@ -233,7 +238,7 @@ def attach_scripts(app, root: Path):
         saved = await asyncio.to_thread(save, request, existing)
         await asyncio.to_thread(
             storage.save_dialogue_workspace,
-            root,
+            script_root(),
             saved["id"],
             settings=workspace.get("settings"),
             finishing=workspace.get("finishing"),

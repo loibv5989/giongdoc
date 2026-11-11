@@ -1,5 +1,5 @@
 import { AudioEditor } from './audio-editor.js'
-import { createStudio } from './studio.js'
+import { createStudio } from './studio.js?v=web-access-v1'
 import { browserLanguage, initializeI18n, languageLabel, t } from './i18n.js'
 
 await initializeI18n()
@@ -78,6 +78,12 @@ async function responseError(response) {
   }
 }
 
+function fetchWorkspace(path, options) {
+  const url = new URL(path, window.location.origin)
+  if (url.origin === window.location.origin && /^\/(tts|system|v1|health)(\/|$)/.test(url.pathname)) url.pathname = `/web${url.pathname}`
+  return fetch(url, options)
+}
+
 async function fetchJson(path, options) {
   const operatorRequest = path.startsWith('/system/') || path === '/tts/purge'
   if (operatorRequest && !['GET', 'HEAD'].includes((options?.method || 'GET').toUpperCase())) {
@@ -89,7 +95,7 @@ async function fetchJson(path, options) {
     headers.set('X-CSRF-Token', session.csrf_token)
     options = { ...options, headers }
   }
-  const response = await fetch(path, options)
+  const response = await fetchWorkspace(path, options)
   if (operatorRequest && response.status === 401) setAdminAccess(false)
   if (!response.ok) throw new Error(await responseError(response))
   return response.json()
@@ -154,8 +160,9 @@ function setAdminAccess(authenticated) {
 async function refreshAdminSession() {
   const check = ++adminSessionCheck
   try {
-    const response = await fetch('/admin/api/session', { credentials: 'same-origin', cache: 'no-store' })
-    if (check === adminSessionCheck) setAdminAccess(response.ok)
+    const response = await fetch('/web/session', { credentials: 'same-origin', cache: 'no-store' })
+    const session = response.ok ? await response.json() : null
+    if (check === adminSessionCheck) setAdminAccess(session?.authenticated === true)
   } catch {
     if (check === adminSessionCheck) setAdminAccess(false)
   }
@@ -621,7 +628,7 @@ $('#generate-button').addEventListener('click', async () => {
       return
     }
     state.generateAbort = new AbortController()
-    const response = await fetch('/tts/generate', {
+    const response = await fetchWorkspace('/tts/generate', {
       method: 'POST',
       headers: { 'content-type': 'application/json' },
       body: JSON.stringify(payload),
@@ -784,7 +791,7 @@ $('#stream-start').addEventListener('click', async () => {
   try {
     playback = await IncrementalAudioPlayback.create()
     state.streamPlayback = playback
-    const response = await fetch('/tts/stream', {
+    const response = await fetchWorkspace('/tts/stream', {
       method: 'POST',
       headers: { 'content-type': 'application/json' },
       body: JSON.stringify(payload),
@@ -1289,7 +1296,7 @@ window.addEventListener('beforeunload', () => {
 restoreSessionState()
 Promise.all([loadWorkspace(), refreshAdminSession()])
   .then(async () => {
-    studio = await createStudio({ state, requestPayload, fetchJson, responseError,
+    studio = await createStudio({ state, requestPayload, fetchJson, fetchApi: fetchWorkspace, responseError,
       showToast, errorMessage, setInputType, updateTextMetrics, output: generateOutput })
     setInputType('magic')
   })

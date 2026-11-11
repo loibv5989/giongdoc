@@ -53,8 +53,9 @@ async function unpackBundle(response) {
 }
 
 export class MagicTakeStudio {
-  constructor({ responseError }) {
+  constructor({ responseError, fetchApi = fetch }) {
     this.responseError = responseError
+    this.fetchApi = fetchApi
   }
 
   async render(payload, blocks, { signal, requestId } = {}) {
@@ -69,7 +70,7 @@ export class MagicTakeStudio {
       seed: Number(block.captureSeed) || 0,
     }))))
     retained.forEach((block) => form.append('takes', takeFile(block)))
-    const response = await fetch('/tts/magic/render', {
+    const response = await this.fetchApi('/tts/magic/render', {
       method: 'POST',
       headers: requestId ? { 'X-KokoroTTS-Request-ID': requestId } : {},
       body: form,
@@ -83,7 +84,7 @@ export class MagicTakeStudio {
   }
 
   async take(payload, speechIndex, { signal, requestId } = {}) {
-    const response = await fetch('/tts/magic/take', {
+    const response = await this.fetchApi('/tts/magic/take', {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
@@ -122,7 +123,7 @@ export class MagicTakeStudio {
       seed: Number(block.captureSeed) || 0,
     }))))
     speech.forEach((block) => form.append('takes', takeFile(block)))
-    const response = await fetch('/tts/magic/assemble-upload', { method: 'POST', body: form, signal })
+    const response = await this.fetchApi('/tts/magic/assemble-upload', { method: 'POST', body: form, signal })
     if (!response.ok) throw new Error(await this.responseError(response))
     return {
       blob: await response.blob(),

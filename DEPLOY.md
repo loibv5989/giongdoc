@@ -75,6 +75,21 @@ Lệnh yêu cầu nhập mật khẩu 2 lần, tối thiểu 12 ký tự. Có th
 
 Nếu dùng `KOKOROTTS_ADMIN_PATH` hoặc đặt file cấu hình runtime ở nơi khác, truyền `--path` đúng với đường dẫn tài khoản mà ứng dụng sử dụng. Không có tài khoản tạo sẵn, mật khẩu mặc định hay chức năng tạo tài khoản qua web.
 
-Trang admin gọi `/admin/api/*`; các đường dẫn này cần được proxy tới ứng dụng qua HTTPS. Có thể tiếp tục giữ các đường dẫn đọc giọng `/tts/*`, `/v1/*` và MCP trong mạng nội bộ như cấu hình Nginx hiện tại. Những API quản trị cũ dưới `/system/*` và alias `/tts/purge` cũng kiểm tra phiên đăng nhập; các thao tác ghi cần CSRF. API đọc giọng thông thường không yêu cầu phiên quản trị và vẫn hoạt động với WordPress trên cùng máy.
+Trang đọc công khai không yêu cầu tài khoản. Trình duyệt gọi `/web/tts/*` qua phiên web ẩn danh có chữ ký, cookie HttpOnly/SameSite Strict và kiểm tra Fetch Metadata/Origin. Cookie web không cấp quyền quản trị. Kịch bản khách được lưu riêng theo phiên trong `persistent/app/scripts/visitors/`, tách khỏi thư viện quản trị và API nội bộ. Mất cookie phiên đồng nghĩa không còn truy cập được thư viện khách cũ.
+
+Trang admin và các chức năng `/web/system/*`, `/web/v1/*`, tài liệu API vẫn cần phiên admin; thao tác quản trị giữ kiểm tra CSRF. Tài liệu trình duyệt dùng `/web/tts/docs`, với schema chỉ dẫn đường gọi `/web`, không thay đổi schema API gốc.
+
+Cấu hình Nginx ở `deploy/giongdoc.solqi.net.conf`. API gốc `/tts/*`, `/v1/*`, `/system/*`, MCP và health chỉ nhận loopback. Backend của mọi website cùng VPS gọi `http://127.0.0.1:7860`; xác thực riêng của API quản trị/OpenAI vẫn giữ nguyên. Nếu muốn dùng URL HTTPS `https://giongdoc.solqi.net/tts/...` ngay trong VPS, thêm `127.0.0.1 giongdoc.solqi.net` vào `/etc/hosts` để cuộc gọi đi thẳng tới Nginx cùng máy thay vì qua Cloudflare. Trình duyệt của website khác không được gọi API gốc hoặc gateway chéo nguồn; website đó phải gọi qua backend của mình.
+
+Phiên web dùng khóa riêng `persistent/app/web-session.key`, quyền `0600`, không đưa lên Git. HTML và phản hồi gateway có `Cache-Control: private, no-store`; JavaScript đầu vào gắn phiên bản theo nội dung để không giữ mã giao tiếp cũ trong cache. Nginx không bật CORS công khai.
+
+Sao lưu cấu hình Nginx cũ bên ngoài các thư mục đang include, sau đó cài cấu hình bằng root:
+
+```sh
+install -m 0644 deploy/giongdoc.solqi.net.conf /etc/nginx/sites-available/giongdoc.solqi.net.conf
+nginx -t && systemctl reload nginx
+```
+
+Web công khai không thể ngăn tuyệt đối tool giả lập đầy đủ trình duyệt. Cơ chế này khóa API gốc, chặn gọi chéo nguồn, kiểm tra phiên web và giữ riêng quyền quản trị; đây không phải cơ chế chống bot tuyệt đối.
 
 `KOKOROTTS_API_KEY` vẫn chỉ áp dụng cho API tương thích OpenAI, không thay thế đăng nhập quản trị. MCP giữ cơ chế và phạm vi truy cập nội bộ của bản nguồn; không công khai MCP qua reverse proxy.

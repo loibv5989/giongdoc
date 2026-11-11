@@ -27,7 +27,7 @@
   <link rel="stylesheet" href="/static/studio-icons.css">
   <link rel="stylesheet" href="/static/styles.css">
   <link rel="stylesheet" href="/static/magic.css">
-  <script type="module" src="/static/app.js"></script>
+  <script type="module" src="/static/app.js?v={{UI_ASSET_VERSION}}"></script>
 </head>
 <body>
   <header class="brand-hero" id="brand-hero">
@@ -60,7 +60,7 @@
       <button class="tab-button" type="button" role="tab" aria-selected="false" data-tab="api" data-admin-only hidden data-i18n="tabs.api">API</button>
       <button class="tab-button" type="button" role="tab" aria-selected="false" data-tab="system" data-admin-only hidden data-i18n="tabs.system">System</button>
     </div>
-    <a class="tab-link" href="/tts/docs" data-admin-only hidden><i class="icon-book-open" aria-hidden="true"></i><span data-i18n="nav.apiDocs">API docs</span></a>
+    <a class="tab-link" href="/web/tts/docs" data-admin-only hidden><i class="icon-book-open" aria-hidden="true"></i><span data-i18n="nav.apiDocs">API docs</span></a>
   </div>
 
   <main class="workspace" data-view="generate">

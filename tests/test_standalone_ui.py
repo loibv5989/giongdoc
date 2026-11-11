@@ -155,6 +155,8 @@ class StandaloneUiTests(unittest.TestCase):
         self.assertNotIn("{{UI_BOOTSTRAP}}", index.text)
         self.assertNotIn("{{UI_TITLE}}", index.text)
         self.assertNotIn("{{UI_DESCRIPTION}}", index.text)
+        self.assertNotIn("{{UI_ASSET_VERSION}}", index.text)
+        self.assertRegex(index.text, r'src="/static/app\.js\?v=[0-9a-f]{12}"')
         self.assertIn('<html lang="vi" dir="ltr">', index.text)
         self.assertIn('id="ui-locale"', index.text)
         self.assertIn('"locale":"vi"', index.text)

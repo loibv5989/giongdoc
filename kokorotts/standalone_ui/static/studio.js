@@ -1,13 +1,13 @@
 import { MagicEditor } from './magic-editor.js'
-import { MagicTakeStudio } from './magic-takes.js'
-import { DialogueScriptLibrary } from './dialogue-script-library.js'
+import { MagicTakeStudio } from './magic-takes.js?v=web-access-v1'
+import { DialogueScriptLibrary } from './dialogue-script-library.js?v=web-access-v1'
 import { t, languageLabel } from './i18n.js'
 
 const $ = (selector) => document.querySelector(selector)
 
-export async function createStudio({ state, requestPayload, fetchJson, responseError,
+export async function createStudio({ state, requestPayload, fetchJson, fetchApi = fetch, responseError,
   showToast, errorMessage, setInputType, updateTextMetrics, output }) {
-  const takes = new MagicTakeStudio({ responseError })
+  const takes = new MagicTakeStudio({ responseError, fetchApi })
   let library = null
   let abort = null
   let generation = 0
@@ -90,7 +90,7 @@ export async function createStudio({ state, requestPayload, fetchJson, responseE
   })
   $('#dialogue-undo').addEventListener('click', () => editor.undoDialogue())
   $('#dialogue-redo').addEventListener('click', () => editor.redoDialogue())
-  library = new DialogueScriptLibrary({ magicEditor: editor, fetchJson, showToast, errorMessage,
+  library = new DialogueScriptLibrary({ magicEditor: editor, fetchJson, fetchApi, showToast, errorMessage,
     getInputType: () => state.inputType,
     setInputType,
     onDocumentChange: () => updateTextMetrics(),
