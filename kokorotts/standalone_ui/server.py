@@ -1,6 +1,5 @@
 from __future__ import annotations
 
-import hashlib
 import html
 import json
 import mimetypes
@@ -115,7 +114,6 @@ def _index_response(locale: str) -> HTMLResponse:
     }
     bootstrap_json = json.dumps(bootstrap, ensure_ascii=False, separators=(",", ":")).replace("<", "\\u003c")
     index_html = (STATIC_DIR / "index.html").read_text(encoding="utf-8")
-    asset_version = hashlib.sha256((STATIC_DIR / "app.js").read_bytes()).hexdigest()[:12]
     version_text = _read_version_file()
     build_details = _snapshot_build_details(version_text)
     build_markup = (
@@ -130,7 +128,6 @@ def _index_response(locale: str) -> HTMLResponse:
         .replace("{{UI_DIRECTION}}", str(locale_entry["direction"]))
         .replace("{{UI_BOOTSTRAP}}", bootstrap_json)
         .replace("{{UI_TITLE}}", html.escape(bootstrap["messages"]["app.title"]))
-        .replace("{{UI_ASSET_VERSION}}", asset_version)
         .replace("{{UI_DESCRIPTION}}", html.escape(bootstrap["messages"]["app.description"], quote=True))
     )
     return HTMLResponse(rendered_html, headers={"Cache-Control": "no-cache"})
