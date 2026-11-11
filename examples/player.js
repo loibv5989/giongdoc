@@ -1,0 +1,759 @@
+const PAGE_LANGUAGES = {
+  en: "American English",
+  ja: "Japanese",
+  zh: "Mandarin Chinese",
+  es: "Spanish",
+  fr: "French",
+  hi: "Hindi",
+  it: "Italian",
+  pt: "Brazilian Portuguese",
+  de: "German",
+  vi: "Vietnamese",
+};
+
+const PAGE_LANGUAGE_BY_VOICE_LANGUAGE = Object.fromEntries(
+  Object.entries(PAGE_LANGUAGES).map(([pageLanguage, voiceLanguage]) => [voiceLanguage, pageLanguage]),
+);
+
+const LANGUAGE_LABELS = {
+  en: {
+    "American English": "American English",
+    "British English": "British English",
+    Japanese: "Japanese",
+    "Mandarin Chinese": "Mandarin Chinese",
+    Spanish: "Spanish",
+    French: "French",
+    Hindi: "Hindi",
+    Italian: "Italian",
+    "Brazilian Portuguese": "Brazilian Portuguese",
+    German: "German",
+    Vietnamese: "Vietnamese",
+  },
+  nb: {
+    "American English": "Amerikansk engelsk",
+    "British English": "Britisk engelsk",
+    Japanese: "Japansk",
+    "Mandarin Chinese": "Mandarin-kinesisk",
+    Spanish: "Spansk",
+    French: "Fransk",
+    Hindi: "Hindi",
+    Italian: "Italiensk",
+    "Brazilian Portuguese": "Brasiliansk portugisisk",
+    German: "Tysk",
+    Vietnamese: "Vietnamesisk",
+  },
+  pl: {
+    "American English": "Angielski amerykański",
+    "British English": "Angielski brytyjski",
+    Japanese: "Japoński",
+    "Mandarin Chinese": "Chiński mandaryński",
+    Spanish: "Hiszpański",
+    French: "Francuski",
+    Hindi: "Hindi",
+    Italian: "Włoski",
+    "Brazilian Portuguese": "Portugalski brazylijski",
+    German: "Niemiecki",
+    Vietnamese: "Wietnamski",
+  },
+  ja: {
+    "American English": "アメリカ英語",
+    "British English": "イギリス英語",
+    Japanese: "日本語",
+    "Mandarin Chinese": "中国語",
+    Spanish: "スペイン語",
+    French: "フランス語",
+    Hindi: "ヒンディー語",
+    Italian: "イタリア語",
+    "Brazilian Portuguese": "ブラジルポルトガル語",
+    German: "ドイツ語",
+    Vietnamese: "ベトナム語",
+  },
+  zh: {
+    "American English": "美式英语",
+    "British English": "英式英语",
+    Japanese: "日语",
+    "Mandarin Chinese": "中文",
+    Spanish: "西班牙语",
+    French: "法语",
+    Hindi: "印地语",
+    Italian: "意大利语",
+    "Brazilian Portuguese": "巴西葡萄牙语",
+    German: "德语",
+    Vietnamese: "越南语",
+  },
+  es: {
+    "American English": "Inglés estadounidense",
+    "British English": "Inglés británico",
+    Japanese: "Japonés",
+    "Mandarin Chinese": "Chino mandarín",
+    Spanish: "Español",
+    French: "Francés",
+    Hindi: "Hindi",
+    Italian: "Italiano",
+    "Brazilian Portuguese": "Portugués de Brasil",
+    German: "Alemán",
+    Vietnamese: "Vietnamita",
+  },
+  fr: {
+    "American English": "Anglais américain",
+    "British English": "Anglais britannique",
+    Japanese: "Japonais",
+    "Mandarin Chinese": "Chinois mandarin",
+    Spanish: "Espagnol",
+    French: "Français",
+    Hindi: "Hindi",
+    Italian: "Italien",
+    "Brazilian Portuguese": "Portugais du Brésil",
+    German: "Allemand",
+    Vietnamese: "Vietnamien",
+  },
+  hi: {
+    "American English": "अमेरिकी अंग्रेज़ी",
+    "British English": "ब्रिटिश अंग्रेज़ी",
+    Japanese: "जापानी",
+    "Mandarin Chinese": "चीनी",
+    Spanish: "स्पेनिश",
+    French: "फ़्रेंच",
+    Hindi: "हिन्दी",
+    Italian: "इतालवी",
+    "Brazilian Portuguese": "ब्राज़ीलियाई पुर्तगाली",
+    German: "जर्मन",
+    Vietnamese: "वियतनामी",
+  },
+  it: {
+    "American English": "Inglese americano",
+    "British English": "Inglese britannico",
+    Japanese: "Giapponese",
+    "Mandarin Chinese": "Cinese mandarino",
+    Spanish: "Spagnolo",
+    French: "Francese",
+    Hindi: "Hindi",
+    Italian: "Italiano",
+    "Brazilian Portuguese": "Portoghese brasiliano",
+    German: "Tedesco",
+    Vietnamese: "Vietnamita",
+  },
+  pt: {
+    "American English": "Inglês americano",
+    "British English": "Inglês britânico",
+    Japanese: "Japonês",
+    "Mandarin Chinese": "Chinês mandarim",
+    Spanish: "Espanhol",
+    French: "Francês",
+    Hindi: "Hindi",
+    Italian: "Italiano",
+    "Brazilian Portuguese": "Português do Brasil",
+    German: "Alemão",
+    Vietnamese: "Vietnamita",
+  },
+  de: {
+    "American English": "Amerikanisches Englisch",
+    "British English": "Britisches Englisch",
+    Japanese: "Japanisch",
+    "Mandarin Chinese": "Mandarin-Chinesisch",
+    Spanish: "Spanisch",
+    French: "Französisch",
+    Hindi: "Hindi",
+    Italian: "Italienisch",
+    "Brazilian Portuguese": "Brasilianisches Portugiesisch",
+    German: "Deutsch",
+    Vietnamese: "Vietnamesisch",
+  },
+  vi: {
+    "American English": "Tiếng Anh Mỹ",
+    "British English": "Tiếng Anh Anh",
+    Japanese: "Tiếng Nhật",
+    "Mandarin Chinese": "Tiếng Trung",
+    Spanish: "Tiếng Tây Ban Nha",
+    French: "Tiếng Pháp",
+    Hindi: "Tiếng Hindi",
+    Italian: "Tiếng Ý",
+    "Brazilian Portuguese": "Tiếng Bồ Đào Nha Brasil",
+    German: "Tiếng Đức",
+    Vietnamese: "Tiếng Việt",
+  },
+};
+
+const TRANSLATIONS = {
+  en: {
+    title: "Hangry Labs KokoroTTS Voice Examples",
+    dockerHub: "Docker Hub",
+    ssmlDialogues: "Magic & dialogues",
+    volumeControl: "Volume control",
+    muteAudio: "Mute audio",
+    unmuteAudio: "Unmute audio",
+    volume: "Volume",
+    brandSubtitle: "Useful tools, easy to run",
+    headline: "KokoroTTS voice examples",
+    intro: "Easy-to-run text-to-speech Docker images built for professionals and for people who are not technical. Install Docker, run one command, open the browser, or call the same API from your own application. KokoroTTS creates compact MP3 audio, exposes the full Kokoro voice set, and works out of the box.",
+    pillVoices: "173 voices",
+    pillLanguages: "11 languages",
+    pillApi: "UI + API",
+    pillOffline: "Offline-friendly Docker image",
+    filterAll: "All",
+    voiceFilterLabel: "Filter voice examples by language",
+    voiceExamplesLabel: "Voice examples",
+    playPrefix: "Play",
+    pausePrefix: "Pause",
+    seekSample: "Seek sample",
+  },
+  nb: {
+    title: "Hangry Labs KokoroTTS stemmeeksempler",
+    dockerHub: "Docker Hub",
+    ssmlDialogues: "Magic og dialoger",
+    volumeControl: "Volumkontroll",
+    muteAudio: "Demp lyd",
+    unmuteAudio: "Slå på lyd",
+    volume: "Volum",
+    brandSubtitle: "Nyttige verktøy, enkle å kjøre",
+    headline: "KokoroTTS stemmeeksempler",
+    intro: "Tekst-til-tale i Docker som er enkelt å kjøre, både for profesjonelle og for personer uten teknisk erfaring. Installer Docker, kjør én kommando, åpne nettleseren eller kall samme API fra din egen applikasjon. KokoroTTS lager kompakt MP3-lyd, tilbyr hele stemmeutvalget og fungerer med en gang.",
+    pillVoices: "173 stemmer",
+    pillLanguages: "11 språk",
+    pillApi: "UI + API",
+    pillOffline: "Docker-bilde for bruk uten nett",
+    filterAll: "Alle",
+    voiceFilterLabel: "Filtrer stemmeeksempler etter språk",
+    voiceExamplesLabel: "Stemmeeksempler",
+    playPrefix: "Spill av",
+    pausePrefix: "Sett på pause",
+    seekSample: "Søk i eksemplet",
+  },
+  pl: {
+    title: "Przykłady głosów Hangry Labs KokoroTTS",
+    dockerHub: "Docker Hub",
+    ssmlDialogues: "Magic i dialogi",
+    volumeControl: "Regulacja głośności",
+    muteAudio: "Wycisz dźwięk",
+    unmuteAudio: "Włącz dźwięk",
+    volume: "Głośność",
+    brandSubtitle: "Przydatne narzędzia, łatwe uruchamianie",
+    headline: "Przykłady głosów KokoroTTS",
+    intro: "Łatwe do uruchomienia obrazy Docker do zamiany tekstu na mowę, przeznaczone dla profesjonalistów i osób nietechnicznych. Zainstaluj Docker, uruchom jedno polecenie, otwórz przeglądarkę lub wywołaj to samo API z własnej aplikacji. KokoroTTS tworzy niewielkie pliki MP3, udostępnia pełny zestaw głosów i działa od razu.",
+    pillVoices: "173 głosy",
+    pillLanguages: "11 języków",
+    pillApi: "UI + API",
+    pillOffline: "Obraz Docker do pracy offline",
+    filterAll: "Wszystkie",
+    voiceFilterLabel: "Filtruj przykłady głosów według języka",
+    voiceExamplesLabel: "Przykłady głosów",
+    playPrefix: "Odtwórz",
+    pausePrefix: "Wstrzymaj",
+    seekSample: "Przewiń próbkę",
+  },
+  ja: {
+    title: "Hangry Labs KokoroTTS 音声サンプル",
+    dockerHub: "Docker Hub",
+    ssmlDialogues: "Magic と対話",
+    volumeControl: "音量調整",
+    muteAudio: "ミュート",
+    unmuteAudio: "ミュート解除",
+    volume: "音量",
+    brandSubtitle: "便利なツールを、簡単に",
+    headline: "KokoroTTS 音声サンプル",
+    intro: "専門家にも、技術に詳しくない人にも使いやすい、Docker で動くテキスト読み上げです。Docker を入れて、コマンドを一つ実行し、ブラウザーを開くだけです。内蔵 UI から使うことも、自分のアプリケーションから同じ API を呼び出すこともできます。KokoroTTS はコンパクトな MP3 音声を作成し、すぐに使えます。",
+    pillVoices: "173 種類の音声",
+    pillLanguages: "11 の言語",
+    pillApi: "UI + API",
+    pillOffline: "オフライン向け Docker イメージ",
+    filterAll: "すべて",
+    voiceFilterLabel: "言語で音声サンプルを絞り込む",
+    voiceExamplesLabel: "音声サンプル",
+    playPrefix: "再生",
+    pausePrefix: "一時停止",
+    seekSample: "サンプルをシーク",
+  },
+  zh: {
+    title: "Hangry Labs KokoroTTS 声音示例",
+    dockerHub: "Docker Hub",
+    ssmlDialogues: "Magic 与对话",
+    volumeControl: "音量控制",
+    muteAudio: "静音",
+    unmuteAudio: "取消静音",
+    volume: "音量",
+    brandSubtitle: "实用工具，轻松运行",
+    headline: "KokoroTTS 声音示例",
+    intro: "易于运行的文本转语音 Docker 镜像，适合专业人员，也适合不太懂技术的用户。安装 Docker，运行一个命令，打开浏览器，或从自己的应用程序调用同一个 API。KokoroTTS 可以生成体积较小的 MP3 音频，提供完整的 Kokoro 声音集，并且开箱即用。",
+    pillVoices: "173 个声音",
+    pillLanguages: "11 种语言",
+    pillApi: "界面 + API",
+    pillOffline: "离线友好的 Docker 镜像",
+    filterAll: "全部",
+    voiceFilterLabel: "按语言筛选声音示例",
+    voiceExamplesLabel: "声音示例",
+    playPrefix: "播放",
+    pausePrefix: "暂停",
+    seekSample: "跳转示例音频",
+  },
+  es: {
+    title: "Ejemplos de voz de Hangry Labs KokoroTTS",
+    dockerHub: "Docker Hub",
+    ssmlDialogues: "Magic y diálogos",
+    volumeControl: "Control de volumen",
+    muteAudio: "Silenciar audio",
+    unmuteAudio: "Activar audio",
+    volume: "Volumen",
+    brandSubtitle: "Herramientas útiles, fáciles de ejecutar",
+    headline: "Ejemplos de voz de KokoroTTS",
+    intro: "Imágenes Docker de texto a voz fáciles de ejecutar, hechas para profesionales y para personas que no son técnicas. Instala Docker, ejecuta un comando, abre el navegador o llama a la misma API desde tu propia aplicación. KokoroTTS crea audio MP3 compacto, expone todo el conjunto de voces de Kokoro y funciona desde el primer momento.",
+    pillVoices: "173 voces",
+    pillLanguages: "11 idiomas",
+    pillApi: "UI + API",
+    pillOffline: "Imagen Docker apta para uso offline",
+    filterAll: "Todo",
+    voiceFilterLabel: "Filtrar ejemplos de voz por idioma",
+    voiceExamplesLabel: "Ejemplos de voz",
+    playPrefix: "Reproducir",
+    pausePrefix: "Pausar",
+    seekSample: "Buscar en la muestra",
+  },
+  fr: {
+    title: "Exemples de voix Hangry Labs KokoroTTS",
+    dockerHub: "Docker Hub",
+    ssmlDialogues: "Magic et dialogues",
+    volumeControl: "Contrôle du volume",
+    muteAudio: "Couper le son",
+    unmuteAudio: "Rétablir le son",
+    volume: "Volume",
+    brandSubtitle: "Des outils utiles, faciles à lancer",
+    headline: "Exemples de voix KokoroTTS",
+    intro: "Des images Docker de texte vers parole faciles à lancer, faites pour les professionnels et pour les personnes qui ne sont pas techniques. Installez Docker, lancez une commande, ouvrez le navigateur ou appelez la même API depuis votre application. KokoroTTS crée un audio MP3 compact, expose tout l'ensemble de voix Kokoro et fonctionne immédiatement.",
+    pillVoices: "173 voix",
+    pillLanguages: "11 langues",
+    pillApi: "UI + API",
+    pillOffline: "Image Docker adaptée au mode hors ligne",
+    filterAll: "Tout",
+    voiceFilterLabel: "Filtrer les exemples de voix par langue",
+    voiceExamplesLabel: "Exemples de voix",
+    playPrefix: "Lire",
+    pausePrefix: "Mettre en pause",
+    seekSample: "Parcourir l'extrait",
+  },
+  hi: {
+    title: "Hangry Labs KokoroTTS आवाज़ उदाहरण",
+    dockerHub: "Docker Hub",
+    ssmlDialogues: "Magic और संवाद",
+    volumeControl: "आवाज़ नियंत्रण",
+    muteAudio: "आवाज़ बंद करें",
+    unmuteAudio: "आवाज़ चालू करें",
+    volume: "आवाज़",
+    brandSubtitle: "उपयोगी टूल, चलाने में आसान",
+    headline: "KokoroTTS आवाज़ उदाहरण",
+    intro: "चलाने में आसान टेक्स्ट टू स्पीच Docker इमेज, पेशेवरों और गैर-तकनीकी लोगों दोनों के लिए। Docker इंस्टॉल करें, एक कमांड चलाएँ, ब्राउज़र खोलें, या अपने एप्लिकेशन से वही API कॉल करें। KokoroTTS छोटा MP3 ऑडियो बनाता है, पूरा Kokoro voice set उपलब्ध कराता है, और तुरंत काम करता है।",
+    pillVoices: "173 आवाज़ें",
+    pillLanguages: "11 भाषाएँ",
+    pillApi: "UI + API",
+    pillOffline: "ऑफ़लाइन-फ्रेंडली Docker इमेज",
+    filterAll: "सभी",
+    voiceFilterLabel: "भाषा के अनुसार आवाज़ उदाहरण फ़िल्टर करें",
+    voiceExamplesLabel: "आवाज़ उदाहरण",
+    playPrefix: "चलाएँ",
+    pausePrefix: "रोकें",
+    seekSample: "नमूना खोजें",
+  },
+  it: {
+    title: "Esempi di voce Hangry Labs KokoroTTS",
+    dockerHub: "Docker Hub",
+    ssmlDialogues: "Magic e dialoghi",
+    volumeControl: "Controllo volume",
+    muteAudio: "Disattiva audio",
+    unmuteAudio: "Attiva audio",
+    volume: "Volume",
+    brandSubtitle: "Strumenti utili, facili da eseguire",
+    headline: "Esempi di voce KokoroTTS",
+    intro: "Immagini Docker per text to speech facili da eseguire, pensate per professionisti e per persone non tecniche. Installa Docker, esegui un comando, apri il browser oppure chiama la stessa API dalla tua applicazione. KokoroTTS crea audio MP3 compatto, espone l'intero set di voci Kokoro e funziona subito.",
+    pillVoices: "173 voci",
+    pillLanguages: "11 lingue",
+    pillApi: "UI + API",
+    pillOffline: "Immagine Docker adatta all'uso offline",
+    filterAll: "Tutto",
+    voiceFilterLabel: "Filtra gli esempi di voce per lingua",
+    voiceExamplesLabel: "Esempi di voce",
+    playPrefix: "Riproduci",
+    pausePrefix: "Pausa",
+    seekSample: "Scorri il campione",
+  },
+  pt: {
+    title: "Exemplos de voz do Hangry Labs KokoroTTS",
+    dockerHub: "Docker Hub",
+    ssmlDialogues: "Magic e diálogos",
+    volumeControl: "Controle de volume",
+    muteAudio: "Silenciar áudio",
+    unmuteAudio: "Ativar áudio",
+    volume: "Volume",
+    brandSubtitle: "Ferramentas úteis, fáceis de executar",
+    headline: "Exemplos de voz do KokoroTTS",
+    intro: "Imagens Docker de text to speech fáceis de executar, feitas para profissionais e para pessoas que não são técnicas. Instale o Docker, execute um comando, abra o navegador ou chame a mesma API a partir da sua aplicação. O KokoroTTS cria áudio MP3 compacto, expõe todo o conjunto de vozes Kokoro e funciona direto.",
+    pillVoices: "173 vozes",
+    pillLanguages: "11 idiomas",
+    pillApi: "UI + API",
+    pillOffline: "Imagem Docker amigável para uso offline",
+    filterAll: "Todos",
+    voiceFilterLabel: "Filtrar exemplos de voz por idioma",
+    voiceExamplesLabel: "Exemplos de voz",
+    playPrefix: "Reproduzir",
+    pausePrefix: "Pausar",
+    seekSample: "Navegar no exemplo",
+  },
+  de: {
+    title: "Hangry Labs KokoroTTS Stimmbeispiele",
+    dockerHub: "Docker Hub",
+    ssmlDialogues: "Magic und Dialoge",
+    volumeControl: "Lautstärkeregelung",
+    muteAudio: "Audio stummschalten",
+    unmuteAudio: "Audio einschalten",
+    volume: "Lautstärke",
+    brandSubtitle: "Nützliche Werkzeuge, einfach auszuführen",
+    headline: "KokoroTTS Stimmbeispiele",
+    intro: "Einfach auszuführende Text-zu-Sprache-Docker-Images für Profis und für Menschen ohne technische Vorkenntnisse. Installieren Sie Docker, führen Sie einen Befehl aus, öffnen Sie den Browser oder rufen Sie dieselbe API aus Ihrer eigenen Anwendung auf. KokoroTTS erstellt kompakte MP3-Audiodateien, bietet alle Stimmen und funktioniert sofort.",
+    pillVoices: "173 Stimmen",
+    pillLanguages: "11 Sprachen",
+    pillApi: "UI + API",
+    pillOffline: "Offline-freundliches Docker-Image",
+    filterAll: "Alle",
+    voiceFilterLabel: "Stimmbeispiele nach Sprache filtern",
+    voiceExamplesLabel: "Stimmbeispiele",
+    playPrefix: "Abspielen",
+    pausePrefix: "Pausieren",
+    seekSample: "Im Beispiel suchen",
+  },
+  vi: {
+    title: "Ví dụ giọng nói Hangry Labs KokoroTTS",
+    dockerHub: "Docker Hub",
+    ssmlDialogues: "Magic và hội thoại",
+    volumeControl: "Điều khiển âm lượng",
+    muteAudio: "Tắt tiếng",
+    unmuteAudio: "Bật tiếng",
+    volume: "Âm lượng",
+    brandSubtitle: "Công cụ hữu ích, dễ dàng khởi chạy",
+    headline: "Ví dụ giọng nói KokoroTTS",
+    intro: "Bộ Docker chuyển văn bản thành giọng nói dễ chạy, dành cho cả chuyên gia và người không rành kỹ thuật. Hãy cài Docker, chạy một lệnh, mở trình duyệt hoặc gọi cùng một API từ ứng dụng của bạn. KokoroTTS tạo âm thanh MP3 nhỏ gọn, cung cấp đầy đủ các giọng nói và hoạt động ngay sau khi khởi động.",
+    pillVoices: "173 giọng nói",
+    pillLanguages: "11 ngôn ngữ",
+    pillApi: "Giao diện + API",
+    pillOffline: "Docker image thân thiện với chế độ ngoại tuyến",
+    filterAll: "Tất cả",
+    voiceFilterLabel: "Lọc ví dụ giọng nói theo ngôn ngữ",
+    voiceExamplesLabel: "Ví dụ giọng nói",
+    playPrefix: "Phát",
+    pausePrefix: "Tạm dừng",
+    seekSample: "Tua trong đoạn mẫu",
+  },
+};
+
+let currentPageLanguage = "en";
+
+function renderVoiceExamples() {
+  const grid = document.querySelector("[data-voice-grid]");
+  if (!grid || !Array.isArray(window.VOICE_EXAMPLES)) {
+    return;
+  }
+
+  grid.innerHTML = window.VOICE_EXAMPLES.map((voice) => `
+    <article class="brand-card p-5" data-language="${voice.language}">
+      <div class="mb-4 flex items-start justify-between gap-3 border-b border-orange-500/20 pb-3">
+        <div>
+          <h2 class="text-lg font-bold text-orange-400">${voice.name}</h2>
+          <p class="mt-1 text-sm text-[#ffb076]/80" data-card-language>${voice.language}</p>
+        </div>
+        <span class="rounded-full border border-orange-500/30 bg-orange-500/10 px-2 py-1 text-xs font-semibold uppercase tracking-wide text-gray-300">${voice.voice}</span>
+      </div>
+      <audio preload="metadata" src="${voice.file}"></audio>
+    </article>
+  `).join("");
+}
+
+renderVoiceExamples();
+
+const players = Array.from(document.querySelectorAll(".brand-card audio"));
+const cards = Array.from(document.querySelectorAll(".brand-card"));
+const filterButtons = Array.from(document.querySelectorAll("[data-language-value]"));
+const volumeButton = document.querySelector(".volume-button");
+const volumeSlider = document.querySelector(".volume-slider");
+const volumeIconOn = document.querySelector(".volume-icon-on");
+const volumeIconMuted = document.querySelector(".volume-icon-muted");
+let currentVolume = Number.parseFloat(volumeSlider?.value || "0.85");
+let lastVolume = currentVolume > 0 ? currentVolume : 0.85;
+
+function formatTime(value) {
+  if (!Number.isFinite(value)) {
+    return "0:00";
+  }
+
+  const minutes = Math.floor(value / 60);
+  const seconds = Math.floor(value % 60).toString().padStart(2, "0");
+  return `${minutes}:${seconds}`;
+}
+
+function pauseOthers(currentAudio) {
+  players.forEach((audio) => {
+    if (audio !== currentAudio) {
+      audio.pause();
+    }
+  });
+}
+
+function pauseAll() {
+  players.forEach((audio) => {
+    audio.pause();
+  });
+}
+
+function setLanguageFilter(language) {
+  pauseAll();
+  translatePage(PAGE_LANGUAGE_BY_VOICE_LANGUAGE[language] || "en");
+
+  filterButtons.forEach((button) => {
+    const isActive = button.dataset.languageValue === language;
+    button.classList.toggle("is-active", isActive);
+    button.setAttribute("aria-pressed", isActive.toString());
+  });
+
+  cards.forEach((card) => {
+    const isVisible = language === "all" || card.dataset.language === language;
+    card.hidden = !isVisible;
+  });
+}
+
+function translatePage(languageCode) {
+  currentPageLanguage = TRANSLATIONS[languageCode] ? languageCode : "en";
+  const translation = TRANSLATIONS[currentPageLanguage];
+  document.documentElement.lang = currentPageLanguage;
+  document.title = translation.title;
+
+  document.querySelectorAll("[data-i18n]").forEach((element) => {
+    const key = element.dataset.i18n;
+    if (translation[key]) {
+      element.textContent = translation[key];
+    }
+  });
+
+  document.querySelectorAll("[data-i18n-aria]").forEach((element) => {
+    const key = element.dataset.i18nAria;
+    if (translation[key]) {
+      element.setAttribute("aria-label", translation[key]);
+    }
+  });
+
+  cards.forEach((card) => {
+    const label = card.querySelector("[data-card-language]");
+    if (label) {
+      label.textContent = LANGUAGE_LABELS[currentPageLanguage][card.dataset.language] || card.dataset.language;
+    }
+    const heading = card.querySelector("h2")?.textContent || "voice sample";
+    const audio = card.querySelector("audio");
+    card.setAttribute("aria-label", `${audio?.paused === false ? translation.pausePrefix : translation.playPrefix} ${heading}`);
+  });
+
+  document.querySelectorAll(".progress-button").forEach((button) => {
+    button.setAttribute("aria-label", translation.seekSample);
+  });
+
+  updateVolumeControl();
+}
+
+function updateVolumeControl() {
+  const isMuted = currentVolume <= 0.001;
+
+  players.forEach((audio) => {
+    audio.volume = currentVolume;
+    audio.muted = isMuted;
+  });
+
+  if (volumeSlider) {
+    volumeSlider.value = currentVolume.toString();
+  }
+
+  if (volumeButton) {
+    const translation = TRANSLATIONS[currentPageLanguage];
+    volumeButton.dataset.muted = isMuted.toString();
+    volumeButton.setAttribute("aria-label", isMuted ? translation.unmuteAudio : translation.muteAudio);
+  }
+
+  if (volumeIconOn && volumeIconMuted) {
+    volumeIconOn.hidden = isMuted;
+    volumeIconMuted.hidden = !isMuted;
+    volumeIconOn.style.display = isMuted ? "none" : "block";
+    volumeIconMuted.style.display = isMuted ? "block" : "none";
+  }
+}
+
+if (volumeSlider) {
+  volumeSlider.addEventListener("input", () => {
+    currentVolume = Number.parseFloat(volumeSlider.value);
+
+    if (currentVolume > 0) {
+      lastVolume = currentVolume;
+    }
+
+    updateVolumeControl();
+  });
+}
+
+if (volumeButton) {
+  volumeButton.addEventListener("click", () => {
+    if (currentVolume > 0) {
+      lastVolume = currentVolume;
+      currentVolume = 0;
+    } else {
+      currentVolume = lastVolume || 0.85;
+    }
+
+    updateVolumeControl();
+  });
+}
+
+filterButtons.forEach((button) => {
+  button.addEventListener("click", () => {
+    setLanguageFilter(button.dataset.languageValue || "all");
+  });
+});
+
+players.forEach((audio) => {
+  const card = audio.closest(".brand-card");
+
+  audio.volume = currentVolume;
+  audio.removeAttribute("controls");
+  if (audio.nextElementSibling && audio.nextElementSibling.classList.contains("player")) {
+    return;
+  }
+
+  const controls = document.createElement("div");
+  controls.className = "player";
+  controls.innerHTML = `
+    <button class="progress-button" type="button" aria-label="${TRANSLATIONS[currentPageLanguage].seekSample}">
+      <span class="progress-track" aria-hidden="true">
+        <span class="progress-fill"></span>
+        <span class="progress-knob"></span>
+      </span>
+    </button>
+    <span class="duration">0:00</span>
+  `;
+
+  audio.insertAdjacentElement("afterend", controls);
+
+  const progressButton = controls.querySelector(".progress-button");
+  const progressFill = controls.querySelector(".progress-fill");
+  const progressKnob = controls.querySelector(".progress-knob");
+  const duration = controls.querySelector(".duration");
+
+  function setProgress(value) {
+    const progress = Math.max(0, Math.min(100, value));
+    progressFill.style.width = `${progress}%`;
+    progressKnob.style.left = `${progress}%`;
+  }
+
+  function seekToPosition(event) {
+    if (Number.isFinite(audio.duration)) {
+      const rect = progressButton.getBoundingClientRect();
+      const position = (event.clientX - rect.left) / rect.width;
+      const progress = Math.max(0, Math.min(1, position));
+      audio.currentTime = progress * audio.duration;
+      setProgress(progress * 100);
+    }
+  }
+
+  function togglePlayback() {
+    if (audio.paused) {
+      pauseOthers(audio);
+      audio.play();
+    } else {
+      audio.pause();
+    }
+  }
+
+  if (card) {
+    card.setAttribute("role", "button");
+    card.setAttribute("tabindex", "0");
+    card.setAttribute("aria-label", `${TRANSLATIONS[currentPageLanguage].playPrefix} ${card.querySelector("h2")?.textContent || "voice sample"}`);
+
+    card.addEventListener("click", togglePlayback);
+    card.addEventListener("keydown", (event) => {
+      if (event.key === "Enter" || event.key === " ") {
+        event.preventDefault();
+        togglePlayback();
+      }
+    });
+  }
+
+  progressButton.addEventListener("click", (event) => {
+    event.stopPropagation();
+    seekToPosition(event);
+  });
+
+  progressButton.addEventListener("pointerdown", (event) => {
+    event.preventDefault();
+    event.stopPropagation();
+    progressButton.setPointerCapture(event.pointerId);
+    seekToPosition(event);
+  });
+
+  progressButton.addEventListener("pointermove", (event) => {
+    if (progressButton.hasPointerCapture(event.pointerId)) {
+      event.preventDefault();
+      event.stopPropagation();
+      seekToPosition(event);
+    }
+  });
+
+  progressButton.addEventListener("pointerup", (event) => {
+    event.preventDefault();
+    event.stopPropagation();
+
+    if (progressButton.hasPointerCapture(event.pointerId)) {
+      progressButton.releasePointerCapture(event.pointerId);
+    }
+  });
+
+  progressButton.addEventListener("pointercancel", (event) => {
+    if (progressButton.hasPointerCapture(event.pointerId)) {
+      progressButton.releasePointerCapture(event.pointerId);
+    }
+  });
+
+  audio.addEventListener("loadedmetadata", () => {
+    duration.textContent = `0:00 / ${formatTime(audio.duration)}`;
+  });
+
+  audio.addEventListener("timeupdate", () => {
+    if (Number.isFinite(audio.duration) && audio.duration > 0) {
+      setProgress((audio.currentTime / audio.duration) * 100);
+      duration.textContent = `${formatTime(audio.currentTime)} / ${formatTime(audio.duration)}`;
+    }
+  });
+
+  audio.addEventListener("play", () => {
+    if (card) {
+      card.classList.add("is-playing");
+      card.setAttribute("aria-label", `${TRANSLATIONS[currentPageLanguage].pausePrefix} ${card.querySelector("h2")?.textContent || "voice sample"}`);
+    }
+  });
+
+  audio.addEventListener("pause", () => {
+    if (card) {
+      card.classList.remove("is-playing");
+      card.setAttribute("aria-label", `${TRANSLATIONS[currentPageLanguage].playPrefix} ${card.querySelector("h2")?.textContent || "voice sample"}`);
+    }
+  });
+
+  audio.addEventListener("ended", () => {
+    setProgress(0);
+    if (card) {
+      card.classList.remove("is-playing");
+      card.setAttribute("aria-label", `${TRANSLATIONS[currentPageLanguage].playPrefix} ${card.querySelector("h2")?.textContent || "voice sample"}`);
+    }
+  });
+});
+
+updateVolumeControl();
+const requestedPageLanguage = new URLSearchParams(window.location.search).get("lang")?.toLowerCase();
+const requestedVoiceLanguage = PAGE_LANGUAGES[requestedPageLanguage];
+
+if (requestedVoiceLanguage) {
+  setLanguageFilter(requestedVoiceLanguage);
+} else if (TRANSLATIONS[requestedPageLanguage]) {
+  setLanguageFilter("all");
+  translatePage(requestedPageLanguage);
+} else {
+  setLanguageFilter("American English");
+}

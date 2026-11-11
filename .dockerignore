@@ -1,0 +1,42 @@
+# Git and local metadata
+.git
+.gitignore
+.github
+.idea
+.ai/
+AGENTS.md
+
+# Python cache/artifacts
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+.pytest_cache/
+.mypy_cache/
+.coverage
+htmlcov/
+
+# Local envs and temp
+.venv/
+venv/
+env/
+*.log
+
+# Workspace scratch area
+todo/
+
+# Large or non-runtime directories
+tests/
+benchmarks/
+examples/
+demo/
+
+# Website builder is separate from the inference image
+site/
+
+# Host runtime data is restored separately from the application source.
+persistent/
+*.zip
+*.zip.sha256
+.env
+.env.*

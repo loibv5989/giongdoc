@@ -1,0 +1,569 @@
+"""Inference lifecycle and synthesis orchestration."""
+
+from __future__ import annotations
+
+import gc
+import logging
+import os
+from collections.abc import Callable, Iterator
+from contextlib import ExitStack, contextmanager
+from dataclasses import dataclass
+from datetime import UTC, datetime
+from threading import Condition, RLock
+
+import numpy as np
+import torch
+from huggingface_hub import hf_hub_download
+
+from .audio import SAMPLE_RATE, to_int16_audio
+from .catalog import (
+    CUSTOM_VOICE_ASSETS,
+    DEFAULT_MODEL_REPO_ID,
+    LANGUAGE_CHOICES,
+    MODEL_FAMILY_CHOICES,
+    STANDARD_MODEL_FAMILY,
+    model_families_for_voices,
+    resolve_language_code,
+    voice_language,
+    voice_model_family,
+    voices_for_model_families,
+)
+from .model import KModel
+from .pipeline import KPipeline
+from .settings import RuntimeSettingsStore
+from .ssml import SSMLProsody, SSMLSynthesisUnit, SSMLValidationError, compile_ssml
+
+logger = logging.getLogger(__name__)
+
+CUDA_ERROR_MARKERS = (
+    "cuda error",
+    "cuda out of memory",
+    "cublas",
+    "cudnn",
+    "cusparse",
+    "device-side assert",
+)
+
+
+@dataclass(frozen=True)
+class SynthesisChunk:
+    audio: np.ndarray
+    phonemes: str
+    voice: str
+    language: str
+    requested_device: str
+    inference_device: str
+    prosody: SSMLProsody = SSMLProsody()
+    fallback_reason: str | None = None
+
+
+@dataclass(frozen=True)
+class SynthesisResult:
+    audio: np.ndarray
+    phonemes: str
+    voices: tuple[str, ...]
+    languages: tuple[str, ...]
+    requested_device: str
+    inference_devices: tuple[str, ...]
+    chunks: tuple[SynthesisChunk, ...] = ()
+    fallback_reason: str | None = None
+
+
+class InferenceRuntime:
+    """Own pipelines, prepared voices, model instances, and their lifecycle."""
+
+    def __init__(
+        self,
+        repo_id: str | None = None,
+        *,
+        model_factory: Callable[[str, str], KModel] | None = None,
+        pipeline_factory: Callable[[str], KPipeline] | None = None,
+        family_pipeline_factory: Callable[[str, str], KPipeline] | None = None,
+        settings: RuntimeSettingsStore | None = None,
+        eager_voices: bool = True,
+    ) -> None:
+        self.repo_id = repo_id or os.getenv("KOKORO_REPO_ID", DEFAULT_MODEL_REPO_ID)
+        self._model_factory = model_factory or self._create_model
+        self._pipeline_factory = pipeline_factory or self._create_pipeline
+        self._family_pipeline_factory = (
+            family_pipeline_factory or self._create_family_pipeline
+        )
+        self.settings = settings or RuntimeSettingsStore()
+        self._served_voices = self.settings.served_voices()
+        self._models: dict[tuple[str, str], KModel] = {}
+        self._active: dict[tuple[str, str], int] = {}
+        self._purging_devices: set[str] = set()
+        self._purging_families: set[str] = set()
+        self._purging_all = False
+        self._last_fallback: dict[str, str] | None = None
+        self._condition = Condition(RLock())
+        self.pipelines = {
+            language: self._pipeline_factory(language) for language in LANGUAGE_CHOICES
+        }
+        self._family_pipelines: dict[tuple[str, str], KPipeline] = {}
+        self._add_product_pronunciations()
+        if eager_voices:
+            self.prepare_voices()
+
+    def _create_model(self, model_family: str, device: str) -> KModel:
+        if model_family == STANDARD_MODEL_FAMILY:
+            return KModel(repo_id=self.repo_id).to(device).eval()
+        asset = next(
+            value
+            for value in CUSTOM_VOICE_ASSETS.values()
+            if value["model_family"] == model_family
+        )
+        config_repo_id = asset.get(
+            "config_repo_id",
+            asset["repo_id"] if "config_file" in asset else self.repo_id,
+        )
+        download_options = (
+            {"revision": asset["revision"]} if "revision" in asset else {}
+        )
+        config_path = hf_hub_download(
+            repo_id=config_repo_id,
+            filename=asset.get("config_file", "config.json"),
+            **download_options,
+        )
+        model_path = hf_hub_download(
+            repo_id=asset["repo_id"],
+            filename=asset["model_file"],
+            **download_options,
+        )
+        return (
+            KModel(repo_id=asset["repo_id"], config=config_path, model=model_path)
+            .to(device)
+            .eval()
+        )
+
+    def _create_pipeline(self, language: str) -> KPipeline:
+        return KPipeline(lang_code=language, repo_id=self.repo_id, model=False)
+
+    @staticmethod
+    def _create_family_pipeline(model_family: str, language: str) -> KPipeline:
+        repo_id = MODEL_FAMILY_CHOICES[model_family]["repo_id"]
+        if language == "z":
+            english_pipeline = KPipeline(lang_code="a", repo_id=repo_id, model=False)
+
+            def phonemize_english(text: str) -> str:
+                return " ".join(result.phonemes for result in english_pipeline(text))
+
+            return KPipeline(
+                lang_code=language,
+                repo_id=repo_id,
+                model=False,
+                en_callable=phonemize_english,
+            )
+        return KPipeline(lang_code=language, repo_id=repo_id, model=False)
+
+    @staticmethod
+    def _add_product_pronunciation(pipeline: KPipeline, language: str) -> None:
+        pronunciation = {"a": "kˈOkəɹO", "b": "kˈQkəɹQ"}.get(language)
+        lexicon = getattr(getattr(pipeline, "g2p", None), "lexicon", None)
+        if pronunciation is not None and lexicon is not None:
+            lexicon.golds["kokoro"] = pronunciation
+
+    def _add_product_pronunciations(self) -> None:
+        for language, pipeline in self.pipelines.items():
+            self._add_product_pronunciation(pipeline, language)
+
+    def _pipeline_for(self, language: str, voice_id: str) -> KPipeline:
+        asset = CUSTOM_VOICE_ASSETS.get(voice_id)
+        if asset is None or "pipeline_repo_id" not in asset:
+            return self.pipelines[language]
+        key = (asset["model_family"], language)
+        with self._condition:
+            pipeline = self._family_pipelines.get(key)
+            if pipeline is None:
+                pipeline = self._family_pipeline_factory(*key)
+                self._add_product_pronunciation(pipeline, language)
+                self._family_pipelines[key] = pipeline
+            return pipeline
+
+    def _cached_pipeline_for(self, language: str, voice_id: str) -> KPipeline | None:
+        asset = CUSTOM_VOICE_ASSETS.get(voice_id)
+        if asset is None or "pipeline_repo_id" not in asset:
+            return self.pipelines[language]
+        return self._family_pipelines.get((asset["model_family"], language))
+
+    def prepare_voices(self) -> None:
+        """Prepare every advertised voice before the service reports ready."""
+        for voice_id in self.served_voices:
+            self._load_voice(voice_id)
+
+    def _load_voice(self, voice_id: str):
+        pipeline = self._pipeline_for(voice_language(voice_id), voice_id)
+        voices = getattr(pipeline, "voices", {})
+        if voice_id in voices:
+            return pipeline.voices[voice_id]
+        asset = CUSTOM_VOICE_ASSETS.get(voice_id)
+        if asset is None:
+            return pipeline.load_voice(voice_id)
+        download_options = (
+            {"revision": asset["revision"]} if "revision" in asset else {}
+        )
+        voice_path = hf_hub_download(
+            repo_id=asset["repo_id"],
+            filename=asset["voice_file"],
+            **download_options,
+        )
+        pack = torch.load(voice_path, map_location="cpu", weights_only=True)
+        if not hasattr(pipeline, "voices"):
+            pipeline.voices = {}
+        pipeline.voices[voice_id] = pack
+        return pack
+
+    @property
+    def served_voices(self) -> list[str]:
+        with self._condition:
+            return list(self._served_voices)
+
+    def set_served_voices(self, voices: list[str]) -> list[str]:
+        selected = self.settings.validate_served_voices(voices)
+        return self._apply_served_voices(selected)
+
+    @property
+    def served_model_families(self) -> list[str]:
+        return model_families_for_voices(self.served_voices)
+
+    def set_served_model_families(self, families: list[str]) -> list[str]:
+        selected_families = self.settings.validate_served_model_families(families)
+        self._apply_served_voices(voices_for_model_families(selected_families))
+        return selected_families
+
+    def _apply_served_voices(self, selected: list[str]) -> list[str]:
+        previous = self.served_voices
+        previous_families = set(model_families_for_voices(previous))
+        selected_families = set(model_families_for_voices(selected))
+        for voice_id in selected:
+            self._load_voice(voice_id)
+        self.settings.set_served_voices(selected)
+        with self._condition:
+            self._served_voices = selected
+        disabled = set(previous) - set(selected)
+        for voice_id in disabled:
+            pipeline = self._cached_pipeline_for(voice_language(voice_id), voice_id)
+            if pipeline is not None:
+                pipeline.voices.pop(voice_id, None)
+        disabled_families = previous_families - selected_families
+        if disabled_families:
+            self.purge_model_families(disabled_families)
+        return list(selected)
+
+    def serves_voice(self, voice_id: str) -> bool:
+        with self._condition:
+            return voice_id in self._served_voices
+
+    @property
+    def loaded_model_devices(self) -> list[str]:
+        with self._condition:
+            return list(dict.fromkeys(device for _, device in self._models))
+
+    @property
+    def loaded_models(self) -> list[dict[str, str]]:
+        with self._condition:
+            return [
+                {"model_family": family, "device": device}
+                for family, device in self._models
+            ]
+
+    @property
+    def last_fallback(self) -> dict[str, str] | None:
+        with self._condition:
+            return dict(self._last_fallback) if self._last_fallback else None
+
+    @contextmanager
+    def use_model(
+        self, device: str, model_family: str = STANDARD_MODEL_FAMILY
+    ) -> Iterator[KModel]:
+        key = (model_family, device)
+        with self._condition:
+            while (
+                self._purging_all
+                or device in self._purging_devices
+                or model_family in self._purging_families
+            ):
+                self._condition.wait()
+            model = self._models.get(key)
+            if model is None:
+                model = self._model_factory(model_family, device)
+                self._models[key] = model
+            self._active[key] = self._active.get(key, 0) + 1
+        try:
+            yield model
+        finally:
+            with self._condition:
+                self._active[key] -= 1
+                if self._active[key] == 0:
+                    del self._active[key]
+                    self._condition.notify_all()
+
+    def purge(self, device: str | None = None) -> tuple[list[str], list[str]]:
+        removed: list[KModel] = []
+        with self._condition:
+            if device is None:
+                while self._purging_devices or self._purging_families:
+                    self._condition.wait()
+                self._purging_all = True
+                while self._active:
+                    self._condition.wait()
+                purged = list(dict.fromkeys(key[1] for key in self._models))
+                removed = list(self._models.values())
+                self._models.clear()
+                self._purging_all = False
+            else:
+                while self._purging_all or self._purging_families:
+                    self._condition.wait()
+                self._purging_devices.add(device)
+                while any(key[1] == device for key in self._active):
+                    self._condition.wait()
+                matching = [key for key in self._models if key[1] == device]
+                purged = [device] if matching else []
+                removed.extend(self._models.pop(key) for key in matching)
+                self._purging_devices.remove(device)
+            remaining = list(dict.fromkeys(key[1] for key in self._models))
+            self._condition.notify_all()
+
+        del removed
+        gc.collect()
+        if torch.cuda.is_available() and (device is None or device.startswith("cuda")):
+            torch.cuda.empty_cache()
+        return purged, remaining
+
+    def purge_model_families(self, families: set[str]) -> list[dict[str, str]]:
+        """Release only selected checkpoint families after their active users finish."""
+        requested = set(families)
+        if not requested:
+            return self.loaded_models
+        removed: list[KModel] = []
+        with self._condition:
+            while self._purging_all or self._purging_devices or self._purging_families:
+                self._condition.wait()
+            self._purging_families.update(requested)
+            while any(key[0] in requested for key in self._active):
+                self._condition.wait()
+            matching = [key for key in self._models if key[0] in requested]
+            removed.extend(self._models.pop(key) for key in matching)
+            self._purging_families.difference_update(requested)
+            remaining = [
+                {"model_family": family, "device": device}
+                for family, device in self._models
+            ]
+            self._condition.notify_all()
+
+        del removed
+        gc.collect()
+        if torch.cuda.is_available():
+            torch.cuda.empty_cache()
+        return remaining
+
+    @staticmethod
+    def is_recoverable_cuda_error(error: RuntimeError) -> bool:
+        if isinstance(error, torch.cuda.OutOfMemoryError):
+            return True
+        message = str(error).lower()
+        return any(marker in message for marker in CUDA_ERROR_MARKERS)
+
+    def iter_synthesis(
+        self,
+        text: str,
+        voice: str,
+        speed: float,
+        device: str,
+        input_type: str = "text",
+        plan: list[SSMLSynthesisUnit] | None = None,
+    ) -> Iterator[SynthesisChunk]:
+        if plan is None:
+            plan = self.prepare_synthesis(text, voice, input_type)
+        fallback_reason = None
+        packs: dict[str, object] = {}
+        model_states: dict[str, tuple[KModel, str]] = {}
+
+        with ExitStack() as stack:
+            for unit in plan:
+                unit_voice = unit.voice or voice
+                unit_language = unit.language or voice_language(unit_voice)
+                if unit.kind == "break":
+                    yield SynthesisChunk(
+                        audio=np.zeros(
+                            round(unit.duration_ms * SAMPLE_RATE / 1000),
+                            dtype=np.float32,
+                        ),
+                        phonemes="",
+                        voice=unit_voice,
+                        language=unit_language,
+                        requested_device=device,
+                        inference_device=device,
+                        prosody=unit.prosody,
+                        fallback_reason=fallback_reason,
+                    )
+                    continue
+                pack = packs.get(unit_voice)
+                if pack is None:
+                    pack = self._load_voice(unit_voice)
+                    packs[unit_voice] = pack
+                model_family = voice_model_family(unit_voice)
+                state = model_states.get(model_family)
+                if state is None:
+                    state = (
+                        stack.enter_context(self.use_model(device, model_family)),
+                        device,
+                    )
+                    model_states[model_family] = state
+                model, inference_device = state
+                phonemes = unit.phonemes
+                if unit.contains_phoneme_override and hasattr(model, "vocab"):
+                    unsupported = sorted(
+                        character
+                        for character in unit.phoneme_override_characters
+                        if character not in model.vocab
+                    )
+                    if unsupported:
+                        rendered = ", ".join(
+                            repr(character) for character in unsupported[:12]
+                        )
+                        raise SSMLValidationError(
+                            f"Phoneme override contains characters outside this model's vocabulary: {rendered}."
+                        )
+                ref_s = pack[len(phonemes) - 1]
+                try:
+                    generated = model(phonemes, ref_s, speed * unit.prosody.speed)
+                except RuntimeError as error:
+                    if (
+                        inference_device != device
+                        or not device.startswith("cuda")
+                        or not self.is_recoverable_cuda_error(error)
+                    ):
+                        raise
+                    fallback_reason = str(error)
+                    logger.warning(
+                        "CUDA inference failed on %s; continuing this request on CPU",
+                        device,
+                    )
+                    with self._condition:
+                        self._last_fallback = {
+                            "requested_device": device,
+                            "inference_device": "cpu",
+                            "error": fallback_reason,
+                            "timestamp": datetime.now(UTC).isoformat(),
+                        }
+                    if torch.cuda.is_available():
+                        torch.cuda.empty_cache()
+                    model = stack.enter_context(self.use_model("cpu", model_family))
+                    inference_device = "cpu"
+                    model_states[model_family] = (model, inference_device)
+                    generated = model(phonemes, ref_s, speed * unit.prosody.speed)
+                yield SynthesisChunk(
+                    audio=generated.numpy(),
+                    phonemes=phonemes,
+                    voice=unit_voice,
+                    language=unit_language,
+                    requested_device=device,
+                    inference_device=inference_device,
+                    prosody=unit.prosody,
+                    fallback_reason=fallback_reason,
+                )
+
+    def synthesize(
+        self,
+        text: str,
+        voice: str,
+        speed: float,
+        device: str,
+        input_type: str = "text",
+        plan: list[SSMLSynthesisUnit] | None = None,
+    ) -> SynthesisResult | None:
+        chunks = list(self.iter_synthesis(text, voice, speed, device, input_type, plan))
+        if not chunks:
+            return None
+        return SynthesisResult(
+            audio=to_int16_audio(np.concatenate([chunk.audio for chunk in chunks])),
+            phonemes="\n".join(chunk.phonemes for chunk in chunks if chunk.phonemes),
+            voices=tuple(
+                dict.fromkeys(chunk.voice for chunk in chunks if chunk.phonemes)
+            ),
+            languages=tuple(
+                dict.fromkeys(chunk.language for chunk in chunks if chunk.phonemes)
+            ),
+            requested_device=device,
+            inference_devices=tuple(
+                dict.fromkeys(chunk.inference_device for chunk in chunks)
+            ),
+            chunks=tuple(chunks),
+            fallback_reason=next(
+                (chunk.fallback_reason for chunk in chunks if chunk.fallback_reason),
+                None,
+            ),
+        )
+
+    def prepare_synthesis(
+        self, text: str, voice: str, input_type: str = "text"
+    ) -> list[SSMLSynthesisUnit]:
+        experimental_chunking = self.settings.experimental_natural_chunking()
+
+        def phonemize(value: str, language: str, segment_voice: str) -> Iterator[str]:
+            pipeline = self._pipeline_for(language, segment_voice)
+            for _, phonemes, _ in pipeline(
+                value,
+                segment_voice,
+                1.0,
+                normalize_markdown_emphasis=input_type == "text",
+                experimental_natural_chunking=experimental_chunking,
+            ):
+                yield phonemes
+
+        def resolve_voice_language(voice_id: str) -> str:
+            if not self.serves_voice(voice_id):
+                raise ValueError(
+                    f"Voice '{voice_id}' is not served by this deployment."
+                )
+            return voice_language(voice_id)
+
+        if input_type == "text":
+            return [
+                SSMLSynthesisUnit(
+                    "speech",
+                    phonemes=phonemes,
+                    language=voice_language(voice),
+                    voice=voice,
+                )
+                for phonemes in phonemize(text, voice_language(voice), voice)
+            ]
+        if input_type == "ssml":
+            return compile_ssml(
+                text,
+                voice_language(voice),
+                phonemize,
+                default_voice=voice,
+                resolve_language=resolve_language_code,
+                resolve_voice_language=resolve_voice_language,
+            )
+        if input_type == "ssml-h":
+            _, groups = self.prepare_dialogue(text, voice)
+            return [unit for group in groups for unit in group]
+        raise ValueError("input_type must be 'text', 'ssml' or 'ssml-h'")
+
+    def prepare_dialogue(self, text: str, voice: str):
+        """Validate and compile a whole studio document with one settings snapshot."""
+        from .ssml_h import compile_dialogue, parse_dialogue
+
+        experimental = self.settings.experimental_natural_chunking()
+        turns = parse_dialogue(text, voice, self.serves_voice)
+
+        def phonemize(value, language, selected_voice):
+            pipeline = self._pipeline_for(language, selected_voice)
+            for _, phonemes, _ in pipeline(value, selected_voice, 1.0,
+                    normalize_markdown_emphasis=False,
+                    experimental_natural_chunking=experimental):
+                if phonemes:
+                    yield phonemes
+        return turns, compile_dialogue(turns, phonemize)
+
+    def phoneme_segments(
+        self, text: str, voice: str, input_type: str = "text"
+    ) -> list[str]:
+        return [
+            unit.phonemes
+            for unit in self.prepare_synthesis(text, voice, input_type)
+            if unit.kind == "speech"
+        ]

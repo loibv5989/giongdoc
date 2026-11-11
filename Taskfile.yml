@@ -1,0 +1,324 @@
+version: '3'
+
+vars:
+  IMAGE: kokorotts:test
+  TINY_IMAGE: kokorotts:tiny
+  PORT: '7860'
+  GPU_DEVICE: '0'
+  APP_DEVICE: 'auto'
+  KOKOROTTS_API_KEY: ''
+  KOKOROTTS_ENABLE_MCP: '0'
+  KOKOROTTS_MCP_BASE_URL: ''
+  LOCAL_AI_BASE_URL: 'http://192.168.0.172:18080/v1'
+  LOCAL_AI_MODEL: ''
+  LOCAL_AI_API_KEY: 'local'
+  LOCAL_MCP_URL: 'http://127.0.0.1:7860/mcp'
+  HF_TOKEN: ''
+  DATA_VOLUME: kokorotts_data
+  LEGACY_HF_CACHE_VOLUME: kokorotts_hf_cache
+  HF_HUB_OFFLINE: '1'
+  TRANSFORMERS_OFFLINE: '1'
+  CONTAINER: kokorotts
+  CONTAINER_LOCAL: kokorotts_local
+  TEMP_WAV: '%TEMP%\\kokorotts_task.wav'
+  TEMP_AUDIO: '%TEMP%\\kokorotts_task_audio'
+  API_TEXT: 'Hello world. This is Kokoro TTS.'
+  API_VOICE: 'af_heart'
+  API_FORMAT: 'mp3'
+  BENCHMARK_BASE_URL: 'http://127.0.0.1:7860'
+  BENCHMARK_LIMIT: '0'
+  BENCHMARK_REPETITIONS: '5'
+  BENCHMARK_COMMENT: ''
+  BENCHMARK_REQUEST_TIMEOUT: '240'
+  VRAM_BENCHMARK_LIMIT: '0'
+  VRAM_BENCHMARK_SAMPLE_INTERVAL: '0.05'
+  VRAM_BENCHMARK_COMMENT: ''
+  DRY_RUN: '0'
+  NEXT_VERSION: ''
+  SKIP_VALIDATION: '0'
+
+tasks:
+  gpuinfo:
+    desc: Show host GPU indexes (use with GPU_DEVICE variable)
+    cmds:
+      - cmd /c nvidia-smi --query-gpu=index,name --format=csv,noheader
+
+  image:
+    desc: Build local baked KokoroTTS Docker image
+    cmds:
+      - powershell -NoProfile -ExecutionPolicy Bypass -File scripts/build-image.ps1 -Target baked -Image "{{.IMAGE}}"
+
+  image-tiny:
+    desc: Build local tiny KokoroTTS Docker image without baked model/voice cache
+    cmds:
+      - powershell -NoProfile -ExecutionPolicy Bypass -File scripts/build-image.ps1 -Target tiny -Image "{{.TINY_IMAGE}}"
+
+  compliance-test:
+    desc: Verify licenses, corresponding source, and build records in a Docker image
+    cmds:
+      - docker run --rm --entrypoint python {{.TINY_IMAGE}} /app/third_party/build/verify_compliance_bundle.py /app/third_party
+
+  data-init:
+    desc: Seed the persistent model and settings volume from the baked image
+    cmds:
+      - cmd /c docker volume create {{.DATA_VOLUME}} >nul
+      - cmd /c docker run --rm -v {{.DATA_VOLUME}}:/data {{.IMAGE}} sh -c "mkdir -p /data && cp -an /app/persistent/. /data/ || true"
+
+  release:
+    desc: Release current VERSION snapshot, tag it, and prepare next snapshot
+    cmds:
+      - powershell -NoProfile -ExecutionPolicy Bypass -File scripts/release.ps1 -DryRun "{{.DRY_RUN}}" -NextVersion "{{.NEXT_VERSION}}" -SkipValidation "{{.SKIP_VALIDATION}}"
+
+  deps:
+    desc: Regenerate Linux/Python 3.13 pinned requirements.txt from requirements.in
+    cmds:
+      - uv pip compile requirements.in --python-version 3.13 --python-platform x86_64-manylinux_2_36 --index-strategy unsafe-best-match --upgrade --no-header --no-annotate --output-file requirements.txt
+
+  deps-test:
+    desc: Check security pins agree across dependency inputs and lockfiles
+    cmds:
+      - uv run --no-project --python 3.13 python -m unittest tests.test_dependency_security -v
+
+  imagerun:
+    desc: Run baked image with UI and API on PORT (default GPU_DEVICE=0)
+    cmds:
+      - cmd /c docker rm -f {{.CONTAINER}} >nul 2>&1
+      - cmd /c docker rm -f {{.CONTAINER_LOCAL}} >nul 2>&1
+      - task: data-init
+      - cmd /c docker run -d --name {{.CONTAINER}} -p {{.PORT}}:7860 --gpus all -e CUDA_VISIBLE_DEVICES={{.GPU_DEVICE}} -e KOKOROTTS_DEVICE={{.APP_DEVICE}} -e KOKOROTTS_API_KEY={{.KOKOROTTS_API_KEY}} -e KOKOROTTS_ENABLE_MCP={{.KOKOROTTS_ENABLE_MCP}} -e KOKOROTTS_MCP_BASE_URL={{.KOKOROTTS_MCP_BASE_URL}} -e PORT=7860 -e HF_TOKEN={{.HF_TOKEN}} -e HF_HUB_OFFLINE={{.HF_HUB_OFFLINE}} -e TRANSFORMERS_OFFLINE={{.TRANSFORMERS_OFFLINE}} -v {{.DATA_VOLUME}}:/app/persistent {{.IMAGE}}
+      - cmd /c docker ps --filter "name={{.CONTAINER}}"
+
+  imagerun-tiny:
+    desc: Run tiny image online on first use, using the persistent data volume
+    cmds:
+      - cmd /c docker rm -f {{.CONTAINER}} >nul 2>&1
+      - cmd /c docker rm -f {{.CONTAINER_LOCAL}} >nul 2>&1
+      - cmd /c docker volume create {{.DATA_VOLUME}} >nul
+      - cmd /c docker run -d --name {{.CONTAINER}} -p {{.PORT}}:7860 --gpus all -e CUDA_VISIBLE_DEVICES={{.GPU_DEVICE}} -e KOKOROTTS_DEVICE={{.APP_DEVICE}} -e KOKOROTTS_API_KEY={{.KOKOROTTS_API_KEY}} -e KOKOROTTS_ENABLE_MCP={{.KOKOROTTS_ENABLE_MCP}} -e KOKOROTTS_MCP_BASE_URL={{.KOKOROTTS_MCP_BASE_URL}} -e PORT=7860 -e HF_TOKEN={{.HF_TOKEN}} -e HF_HUB_OFFLINE=0 -e TRANSFORMERS_OFFLINE=0 -v {{.DATA_VOLUME}}:/app/persistent {{.TINY_IMAGE}}
+      - cmd /c docker ps --filter "name={{.CONTAINER}}"
+
+  localrun:
+    desc: Run baked image with local kokorotts/ bind-mounted for hot-swapping
+    cmds:
+      - cmd /c docker rm -f {{.CONTAINER}} >nul 2>&1
+      - cmd /c docker rm -f {{.CONTAINER_LOCAL}} >nul 2>&1
+      - task: data-init
+      - cmd /c docker run -d --name {{.CONTAINER_LOCAL}} -p {{.PORT}}:7860 --gpus all -e CUDA_VISIBLE_DEVICES={{.GPU_DEVICE}} -e KOKOROTTS_DEVICE={{.APP_DEVICE}} -e KOKOROTTS_API_KEY={{.KOKOROTTS_API_KEY}} -e KOKOROTTS_ENABLE_MCP={{.KOKOROTTS_ENABLE_MCP}} -e KOKOROTTS_MCP_BASE_URL={{.KOKOROTTS_MCP_BASE_URL}} -e KOKOROTTS_UI_DEV=1 -e PORT=7860 -e UVICORN_RELOAD=1 -e HF_TOKEN={{.HF_TOKEN}} -e HF_HUB_OFFLINE={{.HF_HUB_OFFLINE}} -e TRANSFORMERS_OFFLINE={{.TRANSFORMERS_OFFLINE}} -v {{.DATA_VOLUME}}:/app/persistent -v "{{.TASKFILE_DIR}}\kokorotts:/app/kokorotts" -v "{{.TASKFILE_DIR}}\assets:/app/assets:ro" {{.IMAGE}}
+      - cmd /c docker ps --filter "name={{.CONTAINER_LOCAL}}"
+
+  localrun-tiny:
+    desc: Run tiny image with local kokorotts/ bind-mounted, online on first use
+    cmds:
+      - cmd /c docker rm -f {{.CONTAINER}} >nul 2>&1
+      - cmd /c docker rm -f {{.CONTAINER_LOCAL}} >nul 2>&1
+      - cmd /c docker volume create {{.DATA_VOLUME}} >nul
+      - cmd /c docker run -d --name {{.CONTAINER_LOCAL}} -p {{.PORT}}:7860 --gpus all -e CUDA_VISIBLE_DEVICES={{.GPU_DEVICE}} -e KOKOROTTS_DEVICE={{.APP_DEVICE}} -e KOKOROTTS_API_KEY={{.KOKOROTTS_API_KEY}} -e KOKOROTTS_ENABLE_MCP={{.KOKOROTTS_ENABLE_MCP}} -e KOKOROTTS_MCP_BASE_URL={{.KOKOROTTS_MCP_BASE_URL}} -e KOKOROTTS_UI_DEV=1 -e PORT=7860 -e UVICORN_RELOAD=1 -e HF_TOKEN={{.HF_TOKEN}} -e HF_HUB_OFFLINE=0 -e TRANSFORMERS_OFFLINE=0 -v {{.DATA_VOLUME}}:/app/persistent -v "{{.TASKFILE_DIR}}\kokorotts:/app/kokorotts" -v "{{.TASKFILE_DIR}}\assets:/app/assets:ro" {{.TINY_IMAGE}}
+      - cmd /c docker ps --filter "name={{.CONTAINER_LOCAL}}"
+
+  imageweb:
+    desc: Open default browser to local KokoroTTS UI
+    cmds:
+      - cmd /c start "" "http://localhost:{{.PORT}}"
+
+  imageapi:
+    desc: Call API, play generated temp audio, then remove it
+    cmds:
+      - 'cmd /c curl.exe -sS --retry 30 --retry-delay 2 --retry-all-errors http://localhost:{{.PORT}}/tts/ping >nul'
+      - 'cmd /c curl.exe -sS -X POST http://localhost:{{.PORT}}/tts/generate -H "Content-Type: application/json" -d "{\"text\":\"{{.API_TEXT}}\",\"speed\":1.0,\"voice\":\"{{.API_VOICE}}\",\"device\":\"{{.APP_DEVICE}}\",\"output_format\":\"{{.API_FORMAT}}\"}" --output {{.TEMP_AUDIO}}.{{.API_FORMAT}}'
+      - 'cmd /c if not exist {{.TEMP_AUDIO}}.{{.API_FORMAT}} exit /b 1'
+      - 'cmd /c python -c "from pathlib import Path; p=Path(r''{{.TEMP_AUDIO}}.{{.API_FORMAT}}''); assert p.exists() and p.stat().st_size > 0, p"'
+      - 'powershell -NoProfile -ExecutionPolicy Bypass -File scripts/play-audio.ps1 -Path "{{.TEMP_AUDIO}}.{{.API_FORMAT}}"'
+      - 'cmd /c del /f /q {{.TEMP_AUDIO}}.{{.API_FORMAT}}'
+
+  imageapi-voice:
+    desc: Call API for API_VOICE/API_TEXT, play generated temp WAV, then remove it
+    cmds:
+      - 'cmd /c curl.exe -sS --retry 30 --retry-delay 2 --retry-all-errors http://localhost:{{.PORT}}/tts/ping >nul'
+      - 'cmd /c curl.exe -sS -X POST http://localhost:{{.PORT}}/tts/generate -H "Content-Type: application/json" -d "{\"text\":\"{{.API_TEXT}}\",\"speed\":1.0,\"voice\":\"{{.API_VOICE}}\",\"device\":\"{{.APP_DEVICE}}\"}" --output {{.TEMP_WAV}}'
+      - 'cmd /c if not exist {{.TEMP_WAV}} exit /b 1'
+      - 'cmd /c python -c "import winsound; winsound.PlaySound(r''{{.TEMP_WAV}}'', winsound.SND_FILENAME)"'
+      - 'cmd /c del /f /q {{.TEMP_WAV}}'
+
+  german-test:
+    desc: Generate and play one German sample with Martin and Victoria
+    cmds:
+      - task: imageapi-voice
+        vars:
+          API_VOICE: dm_martin
+          API_TEXT: 'Guten Tag. Das ist Martin von Kokoro TTS. Diese Stimme verwendet ein eigenes deutsches Modell.'
+      - task: imageapi-voice
+        vars:
+          API_VOICE: df_victoria
+          API_TEXT: 'Guten Tag. Das ist Victoria von Kokoro TTS. Diese Stimme verwendet ein eigenes deutsches Modell.'
+
+  vietnamese-test:
+    desc: Generate and play one Vietnamese sample with Diem Trinh
+    cmds:
+      - task: imageapi-voice
+        vars:
+          API_VOICE: diem_trinh
+          API_TEXT: 'Xin chào từ Kokoro TTS. Đây là giọng Diễm Trinh sử dụng mô hình tiếng Việt chuyên dụng.'
+
+  chinese-v11-test:
+    desc: Validate v1.1 Chinese discovery, synthesis, streaming, SSML, controls, and long text
+    cmds:
+      - powershell -NoProfile -ExecutionPolicy Bypass -File scripts/test-chinese-v11.ps1 -BaseUrl "http://localhost:{{.PORT}}" -Device "{{.APP_DEVICE}}" -Play
+
+  chinese-v11-examples:
+    desc: Generate any missing v1.1 Chinese family MP3 files for the public gallery
+    cmds:
+      - python scripts/generate-chinese-v11-examples.py --base-url "http://localhost:{{.PORT}}" --device "{{.APP_DEVICE}}"
+
+  ssml-test:
+    desc: Generate, validate, and play one multi-voice SSML dialogue
+    cmds:
+      - powershell -NoProfile -ExecutionPolicy Bypass -File scripts/test-ssml-dialogue.ps1 -BaseUrl "http://localhost:{{.PORT}}" -Device "{{.APP_DEVICE}}"
+
+  ssml-examples:
+    desc: Regenerate, validate, and play every public SSML dialogue example
+    cmds:
+      - powershell -NoProfile -ExecutionPolicy Bypass -File scripts/generate-ssml-examples.ps1 -BaseUrl "http://localhost:{{.PORT}}" -Device "{{.APP_DEVICE}}" -Play
+
+  imageapi-format:
+    desc: Call API for API_FORMAT and verify the output file is non-empty
+    cmds:
+      - 'cmd /c curl.exe -sS --retry 30 --retry-delay 2 --retry-all-errors http://localhost:{{.PORT}}/tts/ping >nul'
+      - 'cmd /c curl.exe -sS -X POST http://localhost:{{.PORT}}/tts/generate -H "Content-Type: application/json" -d "{\"text\":\"{{.API_TEXT}}\",\"speed\":1.0,\"voice\":\"{{.API_VOICE}}\",\"device\":\"{{.APP_DEVICE}}\",\"output_format\":\"{{.API_FORMAT}}\"}" --output {{.TEMP_AUDIO}}.{{.API_FORMAT}}'
+      - 'cmd /c if not exist {{.TEMP_AUDIO}}.{{.API_FORMAT}} exit /b 1'
+      - 'cmd /c python -c "from pathlib import Path; p=Path(r''{{.TEMP_AUDIO}}.{{.API_FORMAT}}''); assert p.exists() and p.stat().st_size > 0, p"'
+      - 'cmd /c del /f /q {{.TEMP_AUDIO}}.{{.API_FORMAT}}'
+
+  client-test:
+    desc: Run native and OpenAI SDK server-backed API tests
+    cmds:
+      - 'cmd /c curl.exe -sS --retry 30 --retry-delay 2 --retry-all-errors http://localhost:{{.PORT}}/tts/ping >nul'
+      - 'cmd /c "set KOKOROTTS_TEST_BASE_URL=http://localhost:{{.PORT}}&& python tests/run_client_tests.py"'
+      - 'cmd /c "set KOKOROTTS_TEST_BASE_URL=http://localhost:{{.PORT}}&& set KOKOROTTS_TEST_API_KEY={{.KOKOROTTS_API_KEY}}&& uv run --no-project --with openai==3.24.0 python tests/run_openai_client_tests.py"'
+
+  chunking-test:
+    desc: Test both persisted chunking modes with live multilingual audio, SSML, streams, and OpenAI speech
+    cmds:
+      - 'python tests/run_chunking_tests.py --base-url http://localhost:{{.PORT}} --device {{.APP_DEVICE}}'
+
+  release-image-test:
+    desc: Qualify every language and model family through a running packaged image
+    cmds:
+      - 'python tests/run_release_image_tests.py --base-url http://localhost:{{.PORT}}'
+
+  mcp-test:
+    desc: Run deterministic MCP artifact, schema, transport, and package-control tests
+    cmds:
+      - 'cmd /c docker run --rm --entrypoint python -e KOKOROTTS_SERVED_MODEL_FAMILIES=kikiri-german-martin -v "{{.TASKFILE_DIR}}\kokorotts:/app/kokorotts:ro" -v "{{.TASKFILE_DIR}}\tests:/app/tests:ro" {{.TINY_IMAGE}} -m unittest tests.test_artifacts tests.test_mcp_server -v'
+
+  mcp-live-test:
+    desc: Generate linked audio and prove package-level model eviction on the live deployment
+    cmds:
+      - 'cmd /c curl.exe -sS --retry 30 --retry-delay 2 --retry-all-errors http://localhost:{{.PORT}}/tts/ping >nul'
+      - 'cmd /c curl.exe -sS -X PUT http://localhost:{{.PORT}}/system/settings/mcp -H "Content-Type: application/json" -d "{\"enabled\":true}" >nul'
+      - 'cmd /c "set LOCAL_MCP_URL={{.LOCAL_MCP_URL}}&& uv run --no-project --with mcp==2.3.0 python tests/run_mcp_live_test.py"'
+
+  mcp-model-test:
+    desc: Exercise KokoroTTS MCP tool use through a smaller local OpenAI-compatible model
+    cmds:
+      - 'cmd /c curl.exe -sS --retry 30 --retry-delay 2 --retry-all-errors http://localhost:{{.PORT}}/tts/ping >nul'
+      - 'cmd /c curl.exe -sS -X PUT http://localhost:{{.PORT}}/system/settings/mcp -H "Content-Type: application/json" -d "{\"enabled\":true}" >nul'
+      - 'cmd /c "set LOCAL_AI_BASE_URL={{.LOCAL_AI_BASE_URL}}&& set LOCAL_AI_MODEL={{.LOCAL_AI_MODEL}}&& set LOCAL_AI_API_KEY={{.LOCAL_AI_API_KEY}}&& set LOCAL_MCP_URL={{.LOCAL_MCP_URL}}&& uv run --no-project --with mcp==2.3.0 python testbench/local_ai_test/run.py"'
+
+  openai-client-test:
+    desc: Run OpenAI-compatible API tests through the official Python SDK
+    cmds:
+      - 'cmd /c curl.exe -sS --retry 30 --retry-delay 2 --retry-all-errors http://localhost:{{.PORT}}/health/ready >nul'
+      - 'cmd /c "set KOKOROTTS_TEST_BASE_URL=http://localhost:{{.PORT}}&& set KOKOROTTS_TEST_API_KEY={{.KOKOROTTS_API_KEY}}&& uv run --no-project --with openai==3.24.0 python tests/run_openai_client_tests.py"'
+
+  benchmark-smoke:
+    desc: Run two voice-generation performance cases without updating benchmark history
+    cmds:
+      - 'cmd /c curl.exe -sS --retry 30 --retry-delay 2 --retry-all-errors {{.BENCHMARK_BASE_URL}}/tts/ping >nul'
+      - 'cmd /c python "benchmarks\tts\run_benchmark.py" --base-url {{.BENCHMARK_BASE_URL}} --device {{.APP_DEVICE}} --limit 2 --repetitions 1 --request-timeout {{.BENCHMARK_REQUEST_TIMEOUT}} --gpu-index {{.GPU_DEVICE}} --output "%TEMP%\kokorotts_benchmark_smoke.json" --no-append'
+
+  benchmark-tts:
+    desc: Run the repeatable multilingual TTS benchmark and append its result
+    cmds:
+      - 'cmd /c curl.exe -sS --retry 30 --retry-delay 2 --retry-all-errors {{.BENCHMARK_BASE_URL}}/tts/ping >nul'
+      - 'cmd /c python "benchmarks\tts\run_benchmark.py" --base-url {{.BENCHMARK_BASE_URL}} --device {{.APP_DEVICE}} --limit {{.BENCHMARK_LIMIT}} --repetitions {{.BENCHMARK_REPETITIONS}} --request-timeout {{.BENCHMARK_REQUEST_TIMEOUT}} --gpu-index {{.GPU_DEVICE}} --comment "{{.BENCHMARK_COMMENT}}"'
+
+  benchmark-test:
+    desc: Run benchmark runner unit tests in the local image without starting inference
+    cmds:
+      - 'cmd /c docker run --rm --entrypoint python -v "{{.TASKFILE_DIR}}\kokorotts:/app/kokorotts:ro" -v "{{.TASKFILE_DIR}}\benchmarks:/app/benchmarks:ro" -v "{{.TASKFILE_DIR}}\examples:/app/examples:ro" -v "{{.TASKFILE_DIR}}\tests:/app/tests:ro" {{.IMAGE}} -m unittest tests.test_benchmark tests.test_vram_benchmark -v'
+
+  benchmark-vram-smoke:
+    desc: Check the isolated VRAM benchmark with one voice without recording history
+    cmds:
+      - 'cmd /c docker run --rm --gpus all -e CUDA_VISIBLE_DEVICES={{.GPU_DEVICE}} -e HF_HUB_OFFLINE=1 -e TRANSFORMERS_OFFLINE=1 -e LOGURU_LEVEL=INFO --entrypoint python -v "{{.TASKFILE_DIR}}\benchmarks:/app/benchmarks" -v "{{.TASKFILE_DIR}}\examples:/app/examples:ro" {{.IMAGE}} -m benchmarks.vram.run_benchmark --device cuda:0 --gpu-index {{.GPU_DEVICE}} --limit 1 --sample-interval {{.VRAM_BENCHMARK_SAMPLE_INTERVAL}} --output /tmp/kokorotts_vram_smoke.json --no-append'
+
+  benchmark-vram:
+    desc: Measure isolated process and whole-device VRAM for every example voice
+    cmds:
+      - 'cmd /c docker run --rm --gpus all -e CUDA_VISIBLE_DEVICES={{.GPU_DEVICE}} -e HF_HUB_OFFLINE=1 -e TRANSFORMERS_OFFLINE=1 -e LOGURU_LEVEL=INFO --entrypoint python -v "{{.TASKFILE_DIR}}\benchmarks:/app/benchmarks" -v "{{.TASKFILE_DIR}}\examples:/app/examples:ro" {{.IMAGE}} -m benchmarks.vram.run_benchmark --device cuda:0 --gpu-index {{.GPU_DEVICE}} --limit {{.VRAM_BENCHMARK_LIMIT}} --sample-interval {{.VRAM_BENCHMARK_SAMPLE_INTERVAL}} --comment "{{.VRAM_BENCHMARK_COMMENT}}"'
+
+  ui-test:
+    desc: Run standalone UI and public examples tests inside the local image
+    cmds:
+      - 'cmd /c docker run --rm --entrypoint python -v "{{.TASKFILE_DIR}}\README.md:/app/README.md:ro" -v "{{.TASKFILE_DIR}}\docs:/app/docs:ro" -v "{{.TASKFILE_DIR}}\scripts:/app/scripts:ro" -v "{{.TASKFILE_DIR}}\kokorotts:/app/kokorotts:ro" -v "{{.TASKFILE_DIR}}\assets:/app/assets:ro" -v "{{.TASKFILE_DIR}}\examples:/app/examples:ro" -v "{{.TASKFILE_DIR}}\tests:/app/tests:ro" {{.IMAGE}} -m unittest tests.test_standalone_ui -v'
+
+  studio-test:
+    desc: Validate live SSML-H, Magic takes/render/assembly and workspace persistence
+    cmds:
+      - 'uv run --no-project --python 3.13 --with httpx==0.28.1 python -m tests.run_studio_tests --base-url http://localhost:{{.PORT}} {{.CLI_ARGS}}'
+
+  unit-test:
+    desc: Run focused runtime, normalization, chunking, audio, benchmark, and standalone UI tests in Docker
+    cmds:
+      - 'cmd /c docker run --rm --entrypoint python -v "{{.TASKFILE_DIR}}\README.md:/app/README.md:ro" -v "{{.TASKFILE_DIR}}\docs:/app/docs:ro" -v "{{.TASKFILE_DIR}}\scripts:/app/scripts:ro" -v "{{.TASKFILE_DIR}}\kokorotts:/app/kokorotts:ro" -v "{{.TASKFILE_DIR}}\assets:/app/assets:ro" -v "{{.TASKFILE_DIR}}\benchmarks:/app/benchmarks:ro" -v "{{.TASKFILE_DIR}}\examples:/app/examples:ro" -v "{{.TASKFILE_DIR}}\tests:/app/tests:ro" {{.IMAGE}} -m unittest tests.test_artifacts tests.test_audio tests.test_benchmark tests.test_vram_benchmark tests.test_chinese_v11_support tests.test_german_support tests.test_vietnamese_support tests.test_mcp_server tests.test_model_duration tests.test_natural_chunking tests.test_openai_api tests.test_pipeline_chunking tests.test_sinegen tests.test_ssml tests.test_ssml_h tests.test_magic_api tests.test_text_normalization tests.test_runtime tests.test_settings tests.test_standalone_ui -v'
+
+  imagestop:
+    desc: Stop running KokoroTTS containers
+    cmds:
+      - cmd: cmd /c docker stop {{.CONTAINER}} >nul 2>&1
+        ignore_error: true
+      - cmd: cmd /c docker stop {{.CONTAINER_LOCAL}} >nul 2>&1
+        ignore_error: true
+
+  logs:
+    desc: Show logs from active KokoroTTS container
+    cmds:
+      - cmd /c docker logs --tail 200 {{.CONTAINER_LOCAL}} 2>nul || docker logs --tail 200 {{.CONTAINER}}
+
+  nuke:
+    desc: Remove KokoroTTS local containers, images, persistent data, and build-input cache
+    cmds:
+      - cmd: cmd /c docker rm -f {{.CONTAINER}} >nul 2>&1
+        ignore_error: true
+      - cmd: cmd /c docker rm -f {{.CONTAINER_LOCAL}} >nul 2>&1
+        ignore_error: true
+      - cmd: cmd /c docker rmi -f {{.IMAGE}} >nul 2>&1
+        ignore_error: true
+      - cmd: cmd /c docker rmi -f {{.TINY_IMAGE}} >nul 2>&1
+        ignore_error: true
+      - cmd: cmd /c docker volume rm -f {{.DATA_VOLUME}} >nul 2>&1
+        ignore_error: true
+      - cmd: cmd /c docker volume rm -f {{.LEGACY_HF_CACHE_VOLUME}} >nul 2>&1
+        ignore_error: true
+      - cmd: powershell -NoProfile -Command "Get-ChildItem -LiteralPath '.build-cache\wheels' -Filter '*.whl' -File -ErrorAction SilentlyContinue | Remove-Item -Force"
+        ignore_error: true
+
+
+  pages-build:
+    desc: Build the README website and integrated voice and SSML galleries
+    dir: '{{.TASKFILE_DIR}}'
+    cmds:
+      - pwsh -NoProfile -File scripts/pages.ps1 build
+
+  pages:
+    desc: Preview the project website at http://127.0.0.1:9006/kokoroTTS/
+    dir: '{{.TASKFILE_DIR}}'
+    cmds:
+      - pwsh -NoProfile -File scripts/pages.ps1 preview
+
+  pages-test:
+    desc: Check public Pages staging and language routing without a GPU
+    dir: '{{.TASKFILE_DIR}}'
+    cmds:
+      - uv run --no-project --python 3.13 python -m unittest discover -s tests -p test_pages.py
+      - node --test site/tests/*.test.mjs
