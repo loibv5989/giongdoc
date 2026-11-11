@@ -82,7 +82,7 @@ async function fetchJson(path, options) {
   const operatorRequest = path.startsWith('/system/') || path === '/tts/purge'
   if (operatorRequest && !['GET', 'HEAD'].includes((options?.method || 'GET').toUpperCase())) {
     const sessionResponse = await fetch('/admin/api/session', { cache: 'no-store' })
-    if (sessionResponse.status === 401) setAdminAccess(false)
+    if (sessionResponse.status === 401) redirectToAdminLogin()
     if (!sessionResponse.ok) throw new Error(await responseError(sessionResponse))
     const session = await sessionResponse.json()
     const headers = new Headers(options?.headers)
@@ -90,7 +90,7 @@ async function fetchJson(path, options) {
     options = { ...options, headers }
   }
   const response = await fetch(path, options)
-  if (operatorRequest && response.status === 401) setAdminAccess(false)
+  if (response.status === 401 && !await refreshAdminSession()) redirectToAdminLogin()
   if (!response.ok) throw new Error(await responseError(response))
   return response.json()
 }
@@ -151,13 +151,20 @@ function setAdminAccess(authenticated) {
   if (!authenticated && ['api', 'system'].includes(state.activeTab)) activateTab('generate')
 }
 
+function redirectToAdminLogin() {
+  setAdminAccess(false)
+  window.location.assign('/admin/login')
+}
+
 async function refreshAdminSession() {
   const check = ++adminSessionCheck
   try {
     const response = await fetch('/admin/api/session', { credentials: 'same-origin', cache: 'no-store' })
     if (check === adminSessionCheck) setAdminAccess(response.ok)
+    return response.ok
   } catch {
     if (check === adminSessionCheck) setAdminAccess(false)
+    return false
   }
 }
 
@@ -167,7 +174,7 @@ $('#workspace-logout').addEventListener('click', async (event) => {
   try {
     const sessionResponse = await fetch('/admin/api/session', { credentials: 'same-origin', cache: 'no-store' })
     if (sessionResponse.status === 401) {
-      setAdminAccess(false)
+      redirectToAdminLogin()
       return
     }
     if (!sessionResponse.ok) throw new Error(t('auth.logoutFailed'))
@@ -176,7 +183,7 @@ $('#workspace-logout').addEventListener('click', async (event) => {
       method: 'POST', headers: { 'X-CSRF-Token': session.csrf_token }, credentials: 'same-origin', cache: 'no-store',
     })
     if (!response.ok && response.status !== 401) throw new Error(t('auth.logoutFailed'))
-    setAdminAccess(false)
+    redirectToAdminLogin()
   } catch {
     showToast(t('auth.logoutFailed'))
   } finally {

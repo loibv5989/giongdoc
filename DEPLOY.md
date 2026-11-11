@@ -75,6 +75,17 @@ Lệnh yêu cầu nhập mật khẩu 2 lần, tối thiểu 12 ký tự. Có th
 
 Nếu dùng `KOKOROTTS_ADMIN_PATH` hoặc đặt file cấu hình runtime ở nơi khác, truyền `--path` đúng với đường dẫn tài khoản mà ứng dụng sử dụng. Không có tài khoản tạo sẵn, mật khẩu mặc định hay chức năng tạo tài khoản qua web.
 
-Trang admin gọi `/admin/api/*`; các đường dẫn này cần được proxy tới ứng dụng qua HTTPS. Có thể tiếp tục giữ các đường dẫn đọc giọng `/tts/*`, `/v1/*` và MCP trong mạng nội bộ như cấu hình Nginx hiện tại. Những API quản trị cũ dưới `/system/*` và alias `/tts/purge` cũng kiểm tra phiên đăng nhập; các thao tác ghi cần CSRF. API đọc giọng thông thường không yêu cầu phiên quản trị và vẫn hoạt động với WordPress trên cùng máy.
+Cấu hình Nginx cho VPS nằm tại `deploy/giongdoc.solqi.net.conf`. Trang đọc yêu cầu phiên admin; người chưa đăng nhập được chuyển đến `/admin/login`. Nginx kiểm tra phiên qua subrequest nội bộ trước khi cho trình duyệt gọi `/tts/*`, `/v1/*`, `/system/*` và tài liệu API. Yêu cầu từ bên ngoài không có phiên hợp lệ bị từ chối; CORS công khai không được bật.
+
+WordPress và các chương trình cùng máy gọi trực tiếp `http://127.0.0.1:7860`, hoặc đi qua Nginx từ loopback. API quản trị vẫn giữ xác thực và CSRF của ứng dụng. MCP chỉ nhận truy cập loopback, kể cả khi người dùng web đã đăng nhập. Tiến trình Python phải tiếp tục lắng nghe tại `127.0.0.1:7860`.
+
+Cài cấu hình bằng root sau khi cập nhật mã và khởi động lại ứng dụng:
+
+```sh
+install -m 0644 deploy/giongdoc.solqi.net.conf /etc/nginx/sites-available/giongdoc.solqi.net.conf
+nginx -t && systemctl reload nginx
+```
+
+Sao lưu cấu hình cũ bên ngoài các thư mục Nginx đang include trước khi thay. File mẫu dùng chứng chỉ tại `/etc/letsencrypt/live/giongdoc.solqi.net/`. JavaScript đầu vào được gắn mã phiên bản theo nội dung, để các thay đổi đăng nhập không bị giữ lại bởi cache trình duyệt hoặc CDN.
 
 `KOKOROTTS_API_KEY` vẫn chỉ áp dụng cho API tương thích OpenAI, không thay thế đăng nhập quản trị. MCP giữ cơ chế và phạm vi truy cập nội bộ của bản nguồn; không công khai MCP qua reverse proxy.

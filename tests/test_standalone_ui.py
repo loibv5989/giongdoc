@@ -155,6 +155,8 @@ class StandaloneUiTests(unittest.TestCase):
         self.assertNotIn("{{UI_BOOTSTRAP}}", index.text)
         self.assertNotIn("{{UI_TITLE}}", index.text)
         self.assertNotIn("{{UI_DESCRIPTION}}", index.text)
+        self.assertNotIn("{{UI_ASSET_VERSION}}", index.text)
+        self.assertRegex(index.text, r'src="/static/app\.js\?v=[0-9a-f]{12}"')
         self.assertIn('<html lang="vi" dir="ltr">', index.text)
         self.assertIn('id="ui-locale"', index.text)
         self.assertIn('"locale":"vi"', index.text)
@@ -228,6 +230,20 @@ class StandaloneUiTests(unittest.TestCase):
         self.assertIsInstance(gpu.json()["gpus"], list)
         self.assertEqual(gpu.headers["cache-control"], "no-store")
         self.assertEqual(api.json(), {"msg": "pong"})
+
+    def test_entry_script_version_changes_when_script_content_changes(self) -> None:
+        source_path = LOCALES_DIR.parent / "app.js"
+        original = Path.read_bytes
+        with TestClient(create_app(api_app=self.backend_app())) as client:
+            before = re.search(r'/static/app\.js\?v=([0-9a-f]{12})', client.get("/").text).group(1)
+            def changed_content(path):
+                content = original(path)
+                return content + b"\n// Version probe\n" if path == source_path else content
+            with patch.object(Path, "read_bytes", changed_content):
+                after = re.search(r'/static/app\.js\?v=([0-9a-f]{12})', client.get("/").text).group(1)
+            restored = re.search(r'/static/app\.js\?v=([0-9a-f]{12})', client.get("/").text).group(1)
+        self.assertNotEqual(before, after)
+        self.assertEqual(before, restored)
 
     def test_supported_locale_routes_and_catalogs_are_complete(self) -> None:
         expected_locales = ("vi", "en", "pl", "ja", "zh", "es", "de")
