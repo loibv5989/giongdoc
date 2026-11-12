@@ -10,6 +10,7 @@ from kokorotts.text_normalization import (
     expand_english_measurements,
     expand_english_roman_numerals,
     normalize_english_text,
+    normalize_vietnamese_text,
     strip_english_markdown_emphasis,
 )
 
@@ -231,6 +232,78 @@ class EnglishPronunciationRegressionTest(unittest.TestCase):
                 )
             with self.subTest(dialect="gb", text=text):
                 self.assertIn("ˌaɹɪθmˈɛtɪk", self.phonemes(self.british, text))
+
+
+
+
+class VietnameseNumberNormalizationTest(unittest.TestCase):
+    def test_cardinal_numbers_and_contextual_unit_forms(self) -> None:
+        cases = {
+            "0": "không", "1": "một", "4": "bốn", "5": "năm",
+            "10": "mười", "11": "mười một", "14": "mười bốn", "15": "mười lăm",
+            "20": "hai mươi", "21": "hai mươi mốt", "24": "hai mươi bốn", "25": "hai mươi lăm",
+            "101": "một trăm linh một", "105": "một trăm linh năm", "115": "một trăm mười lăm",
+            "1000": "một nghìn", "1001": "một nghìn không trăm linh một",
+            "1010": "một nghìn không trăm mười", "2026": "hai nghìn không trăm hai mươi sáu",
+            "1000000": "một triệu", "1000001": "một triệu không trăm linh một", "1000000000": "một tỷ",
+        }
+        for text, spoken in cases.items():
+            with self.subTest(text=text):
+                self.assertEqual(normalize_vietnamese_text(text), spoken)
+
+    def test_expands_the_reported_book_sentence_without_changing_words(self) -> None:
+        self.assertEqual(
+            normalize_vietnamese_text("năm 14 đời Chiêu công có Lão Kì"),
+            "năm mười bốn đời Chiêu công có Lão Kì",
+        )
+        self.assertEqual(normalize_vietnamese_text("(14), 21; 25."), "(mười bốn), hai mươi mốt; hai mươi lăm.")
+
+    def test_reads_part_and_chapter_roman_numbers_as_vietnamese_cardinals(self) -> None:
+        for roman, spoken in {"I":"một", "II":"hai", "III":"ba", "IV":"bốn", "V":"năm", "IX":"chín", "XI":"mười một", "XIV":"mười bốn", "XXI":"hai mươi mốt", "XL":"bốn mươi"}.items():
+            for label in ("Phần", "PHẦN", "phần", "Chương", "CHƯƠNG", "chương"):
+                with self.subTest(roman=roman, label=label):
+                    self.assertEqual(normalize_vietnamese_text(f"{label} {roman}: Nội dung"), f"{label} {spoken}: Nội dung")
+        self.assertEqual(normalize_vietnamese_text("Phần I. Chương II."), "Phần một. Chương hai.")
+        self.assertEqual(normalize_vietnamese_text("(Chương IV), xem Phần II."), "(Chương bốn), xem Phần hai.")
+
+    def test_roman_normalization_preserves_other_words_and_invalid_forms(self) -> None:
+        text = "I, II, CD, IVR. Phần vi mô; phần di động; chương trình; phần mềm."
+        self.assertEqual(normalize_vietnamese_text(text), text)
+        for text in ("Phần IIII", "Chương IIX", "Chương VX", "Phần IC", "Phần IVR", "Chương I@example.com"):
+            with self.subTest(text=text):
+                self.assertEqual(normalize_vietnamese_text(text), text)
+
+    def test_grouped_numbers_and_decimal_digits(self) -> None:
+        cases = {
+            "1.234": "một nghìn hai trăm ba mươi bốn",
+            "1.234,50": "một nghìn hai trăm ba mươi bốn phẩy năm không",
+            "1,234.50": "một nghìn hai trăm ba mươi bốn phẩy năm không",
+            "1,234,567": "một triệu hai trăm ba mươi bốn nghìn năm trăm sáu mươi bảy",
+            "3,14": "ba phẩy một bốn", "3.14": "ba phẩy một bốn",
+            "0,05": "không phẩy không năm", "0.014": "không phẩy không một bốn",
+        }
+        for text, spoken in cases.items():
+            with self.subTest(text=text):
+                self.assertEqual(normalize_vietnamese_text(text), spoken)
+
+    def test_preserves_leading_zeroes_and_long_digit_sequences(self) -> None:
+        self.assertEqual(normalize_vietnamese_text("0014"), "không không một bốn")
+        self.assertEqual(normalize_vietnamese_text("1" * 30), " ".join(["một"] * 30))
+
+    def test_signs_and_ranges_have_different_meanings(self) -> None:
+        self.assertEqual(normalize_vietnamese_text("-14; −15; +21"), "âm mười bốn; âm mười lăm; cộng hai mươi mốt")
+        self.assertEqual(normalize_vietnamese_text("14-21; 14–25"), "mười bốn-hai mươi mốt; mười bốn–hai mươi lăm")
+
+    def test_does_not_rewrite_identifiers_or_interpret_invalid_numeric_formats(self) -> None:
+        text = "v1.2.3, file14, id_14, 14px, 192.168.1.1 and 1.2.3"
+        self.assertEqual(normalize_vietnamese_text(text), text)
+        text = "https://example.com/14?year=2026 www.example.com/14 book14@example.com"
+        self.assertEqual(normalize_vietnamese_text(text), text)
+
+    def test_repeated_normalization_is_stable(self) -> None:
+        text = "Năm 14, có 1.234 cuốn và giá 3,14."
+        spoken = normalize_vietnamese_text(text)
+        self.assertEqual(normalize_vietnamese_text(spoken), spoken)
 
 
 if __name__ == "__main__":

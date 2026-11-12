@@ -35,6 +35,33 @@ class VietnameseSupportTest(unittest.TestCase):
         self.assertTrue(segments[0].phonemes)
         self.assertNotIn("2026", segments[0].phonemes)
 
+    def test_numbers_have_the_same_phonemes_as_spoken_vietnamese_words(self) -> None:
+        pipeline = KPipeline(lang_code="v", model=False)
+        for original, spoken in [
+            ("năm 14 đời Chiêu công có Lão Kì", "năm mười bốn đời Chiêu công có Lão Kì"),
+            ("14", "mười bốn"),
+            ("Phần I: ĐỜI SỐNG VÀ TÁC PHẨM", "Phần một: ĐỜI SỐNG VÀ TÁC PHẨM"),
+            ("Chương II: Tác phẩm", "Chương hai: Tác phẩm"),
+            ("CHƯƠNG XIV", "CHƯƠNG mười bốn"),
+            ("Hôm nay là năm 2026.", "Hôm nay là năm hai nghìn không trăm hai mươi sáu."),
+            ("Có 21 cuốn, giá 3,14.", "Có hai mươi mốt cuốn, giá ba phẩy một bốn."),
+        ]:
+            for natural in (False, True):
+                with self.subTest(original=original, natural=natural):
+                    actual = list(pipeline(original, experimental_natural_chunking=natural))
+                    expected = list(pipeline(spoken, experimental_natural_chunking=natural))
+                    self.assertEqual([part.phonemes for part in actual], [part.phonemes for part in expected])
+                    self.assertEqual("".join(part.graphemes for part in actual), original)
+
+    def test_repeated_years_remain_complete_and_within_model_limits(self) -> None:
+        pipeline = KPipeline(lang_code="v", model=False)
+        text = "Năm 2026 có 14 cuốn sách và 25 người đọc. " * 40
+        for natural in (False, True):
+            segments = list(pipeline(text, experimental_natural_chunking=natural))
+            self.assertGreater(len(segments), 1)
+            self.assertEqual("".join(part.graphemes for part in segments).strip(), text.strip())
+            self.assertTrue(all(0 < len(part.phonemes) <= 510 for part in segments))
+
     def test_long_vietnamese_text_is_split_without_phoneme_truncation(self) -> None:
         pipeline = KPipeline(lang_code="v", model=False)
         text = (

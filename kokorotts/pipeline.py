@@ -2,7 +2,7 @@ from .catalog import DEFAULT_MODEL_REPO_ID, LANGUAGE_ALIASES, PIPELINE_LANGUAGE_
 from .english_pronunciation import correct_english_pronunciations
 from .model import KModel
 from .natural_chunking import phonemize_naturally
-from .text_normalization import normalize_english_text
+from .text_normalization import normalize_english_text, normalize_vietnamese_text
 from dataclasses import dataclass
 from huggingface_hub import hf_hub_download
 from loguru import logger
@@ -132,7 +132,7 @@ class KPipeline:
                 raise
 
             def vietnamese_g2p(text: str):
-                return phonemize_text(text), None
+                return phonemize_text(normalize_vietnamese_text(text)), None
 
             self.g2p = vietnamese_g2p
         else:

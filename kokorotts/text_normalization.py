@@ -204,3 +204,105 @@ def normalize_english_text(
     text = expand_english_measurements(text)
     text = expand_english_eras(text)
     return expand_english_roman_numerals(text)
+
+
+# Match Vietnamese labels case-insensitively, but require uppercase numerals:
+# lowercase words such as "phần vi mô" are not Roman numbers.
+_VIETNAMESE_ROMAN_CONTEXT = re.compile(
+    r"\b(?P<label>(?i:Phần|Chương))(?P<space>\s+)(?P<roman>[IVXLCDM]+)\b(?![@/])"
+)
+
+
+def expand_vietnamese_roman_numerals(text: str) -> str:
+    """Expand canonical Roman numbers in Vietnamese part/chapter references."""
+    def replace(match: re.Match[str]) -> str:
+        value = _roman_to_int(match.group("roman"))
+        if value is None:
+            return match.group(0)
+        return f"{match.group('label')}{match.group('space')}{value}"
+
+    return _VIETNAMESE_ROMAN_CONTEXT.sub(replace, text)
+
+
+_VIETNAMESE_DIGITS = ("không", "một", "hai", "ba", "bốn", "năm", "sáu", "bảy", "tám", "chín")
+_VIETNAMESE_NUMBER = re.compile(
+    r"(?P<protected>(?:https?://|www\.)[^\s<>]+|[\w.+-]+@[\w.-]+\.[A-Za-z]{2,})"
+    r"|(?<![\w.])(?P<sign>[-−+])?(?P<number>[0-9]+(?:[.,][0-9]+)*)(?![\w]|[.,][0-9])"
+)
+
+
+def _vietnamese_triplet(value: int, full_hundreds: bool = False) -> str:
+    hundreds, remainder = divmod(value, 100)
+    tens, units = divmod(remainder, 10)
+    words = []
+    if hundreds or full_hundreds:
+        words.extend((_VIETNAMESE_DIGITS[hundreds], "trăm"))
+    if tens >= 2:
+        words.extend((_VIETNAMESE_DIGITS[tens], "mươi"))
+    elif tens == 1:
+        words.append("mười")
+    elif units and (hundreds or full_hundreds):
+        words.append("linh")
+    if units:
+        words.append("mốt" if units == 1 and tens >= 2 else "lăm" if units == 5 and tens else _VIETNAMESE_DIGITS[units])
+    return " ".join(words)
+
+
+def _vietnamese_integer(digits: str) -> str:
+    # Leading zeroes and long digit sequences are identifiers, not quantities.
+    if (len(digits) > 1 and digits.startswith("0")) or len(digits) > 18:
+        return " ".join(_VIETNAMESE_DIGITS[int(digit)] for digit in digits)
+    value = int(digits)
+    if value == 0:
+        return _VIETNAMESE_DIGITS[0]
+    groups = []
+    while value:
+        value, group = divmod(value, 1000)
+        groups.append(group)
+    words = []
+    for index in range(len(groups) - 1, -1, -1):
+        group = groups[index]
+        if group == 0:
+            continue
+        words.append(_vietnamese_triplet(group, index < len(groups) - 1 and group < 100))
+        unit = ("", "nghìn", "triệu")[index % 3]
+        scale = " ".join(part for part in (unit, *("tỷ" for _ in range(index // 3))) if part)
+        if scale:
+            words.append(scale)
+    return " ".join(words)
+
+
+def _vietnamese_number(value: str) -> str | None:
+    # Vietnamese grouping/decimal marks are primary; accept unambiguous imported forms.
+    integer = value
+    fraction = None
+    if re.fullmatch(r"[1-9][0-9]{0,2}(?:\.[0-9]{3})+(?:,[0-9]+)?", value):
+        integer, _, fraction = value.partition(",")
+        integer = integer.replace(".", "")
+    elif re.fullmatch(r"[1-9][0-9]{0,2}(?:,[0-9]{3})+\.[0-9]+", value):
+        integer, fraction = value.split(".")
+        integer = integer.replace(",", "")
+    elif re.fullmatch(r"[1-9][0-9]{0,2}(?:,[0-9]{3}){2,}", value):
+        integer = value.replace(",", "")
+    elif value.count(",") + value.count(".") == 1:
+        integer, fraction = re.split(r"[.,]", value)
+    elif not value.isdigit():
+        return None
+    spoken = _vietnamese_integer(integer)
+    if fraction:
+        spoken += " phẩy " + " ".join(_VIETNAMESE_DIGITS[int(digit)] for digit in fraction)
+    return spoken
+
+
+def normalize_vietnamese_text(text: str) -> str:
+    """Speak numeric values as Vietnamese words before tone-sensitive ViG2P."""
+    def replace(match: re.Match[str]) -> str:
+        if match.group("protected"):
+            return match.group(0)
+        spoken = _vietnamese_number(match.group("number"))
+        if spoken is None:
+            return match.group(0)
+        sign = match.group("sign")
+        return ("âm " if sign in {"-", "−"} else "cộng " if sign == "+" else "") + spoken
+
+    return _VIETNAMESE_NUMBER.sub(replace, expand_vietnamese_roman_numerals(text))
